@@ -1,0 +1,16 @@
+---
+apiVersion: config.openshift.io/v1
+kind: ImageDigestMirrorSet
+metadata:
+  name: idms-additional-images
+spec:
+  imageDigestMirrors:
+  - source: registry.redhat.io/openshift4
+    mirrors:
+    - registry.appliance.openshift.com:22625/openshift4
+  - source: registry.redhat.io/rhel9
+    mirrors:
+    - registry.appliance.openshift.com:22625/rhel9
+  - source: docker.io/rancher
+    mirrors:
+    - registry.appliance.openshift.com:22625/rancher
