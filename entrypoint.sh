@@ -104,4 +104,29 @@ if [ "${APPLIANCE_FORMAT:-raw}" = "live-iso" ]; then
     BUILD_ARGS="build live-iso"
 fi
 
-exec /openshift-appliance --dir /assets $BUILD_ARGS
+/openshift-appliance --dir /assets $BUILD_ARGS
+
+# Generate the agent config ISO using the openshift-install binary cached by the build step.
+# openshift-install deletes install-config.yaml and agent-config.yaml after reading them,
+# so work in a temp dir to preserve the originals in cluster-config/.
+OCP_INSTALL="/assets/cache/4.18.34-x86_64/openshift-install"
+TMPDIR=$(mktemp -d)
+trap 'rm -rf "$TMPDIR"' EXIT
+
+cp /assets/cluster-config/install-config.yaml "$TMPDIR/"
+cp /assets/cluster-config/agent-config.yaml "$TMPDIR/"
+
+"$OCP_INSTALL" agent create config-image --dir "$TMPDIR"
+
+cp "$TMPDIR/agentconfig.noarch.iso" /assets/cluster-config/agentconfig.noarch.iso
+
+if [ -d "$TMPDIR/auth" ]; then
+    cp -r "$TMPDIR/auth" /assets/cluster-config/
+fi
+
+echo ""
+echo "Appliance ready. Boot the node, then monitor installation:"
+echo "  ssh core@${RENDEZVOUS_IP} sudo journalctl -fu assisted-service"
+echo ""
+echo "Once installed, access the cluster:"
+echo "  export KUBECONFIG=/assets/cluster-config/auth/kubeconfig"
