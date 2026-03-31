@@ -1,4 +1,4 @@
-FROM quay.io/edge-infrastructure/openshift-appliance@sha256:4382fab9eca23367846bcd72451ada2ea163aa90bc6a865073b213c8117ab723
+FROM quay.io/edge-infrastructure/openshift-appliance@sha256:3cc10f5619a11ca98749e66473db93b0eb69a27544495d09c16e111b1a147080
 
 # Static manifests — baked in at image build time; entrypoint copies to /assets at run time.
 # Files that reference the AAP namespace use ${NAMESPACE} as a placeholder; the entrypoint

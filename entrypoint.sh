@@ -104,6 +104,10 @@ if [ "${APPLIANCE_FORMAT:-raw}" = "live-iso" ]; then
     BUILD_ARGS="build live-iso"
 fi
 
+# Workaround: openshift-appliance mounts the registry storage at /assetstemp/data
+# instead of /assets/temp/data. Symlink so the path resolves correctly.
+ln -sfn /assets/temp /assetstemp
+
 /openshift-appliance --dir /assets $BUILD_ARGS
 
 # Generate the agent config ISO using the openshift-install binary cached by the build step.
