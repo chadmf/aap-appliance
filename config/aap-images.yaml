@@ -1,0 +1,31 @@
+# AAP operator images to pre-cache in the appliance registry.
+# Managed by scripts/update-aap-images.sh — do not edit manually.
+# BEGIN AAP IMAGES
+- name: quay.io/aap/ansible-automation-platform/operator-index@sha256:fd5ffd2ea7a5e06c28762ad57200f9941dd58551c866627695edc5c241e045f2
+- name: quay.io/aap/ansible-automation-platform-27-next/controller-rhel9-operator@sha256:5595e3b032d3120bc6a69746661b329efe473dca747d8b3902de8e71273e2134
+- name: quay.io/aap/ansible-automation-platform-27-next/controller-rhel9@sha256:21de53abe1fd0ff057f9c825674d835a3bf003d0b92463d41064d00591885998
+- name: quay.io/aap/ansible-automation-platform-27-next/eda-controller-rhel9-operator@sha256:bc3e29660e1adb842da732e8a381a2854470891d32d519eefeb3464ff627d76d
+- name: quay.io/aap/ansible-automation-platform-27-next/eda-controller-rhel9@sha256:a02f6798f059948bc41178e45dc9f26dd84f6265aca397937a471930f3c6389e
+- name: quay.io/aap/ansible-automation-platform-27-next/eda-controller-ui-rhel9@sha256:a643d66b17b315b7c6ee184baec28c070fe0ba9d48c22901d2be15b9f24605b3
+- name: quay.io/aap/ansible-automation-platform-27-next/ee-minimal-rhel9@sha256:71660576f88c341612634555755ea81d7e226d804eb0e4ea253673fe4610aa54
+- name: quay.io/aap/ansible-automation-platform-27-next/ee-supported-rhel9@sha256:b72fbd410cb86a9e431b3248ce259c217c10601767dbec248970d065df61bdad
+- name: quay.io/aap/ansible-automation-platform-27-next/gateway-proxy-rhel9@sha256:3b2c0c1d8512f2243a0179045851b414b6c206cc38b407543838c6788859e11b
+- name: quay.io/aap/ansible-automation-platform-27-next/gateway-rhel9-operator@sha256:fc511f6258f6704c2a6e2816e83cdfa09b0aba1bf959ecab4b2c5bdf918979be
+- name: quay.io/aap/ansible-automation-platform-27-next/gateway-rhel9@sha256:3a9f733e3a53987779e398385f824acc352fe09a6de23d61a66f066e7bc91288
+- name: quay.io/aap/ansible-automation-platform-27-next/hub-rhel9-operator@sha256:4c046ff0d7384c82721289b8bf864fddad5438083b0c0cd1af8cdb9bc3a55e91
+- name: quay.io/aap/ansible-automation-platform-27-next/hub-rhel9@sha256:e8d6e18c6cf59cee4bf8dd608b6a6c545108e9417e369c12ef2d37918d3cca68
+- name: quay.io/aap/ansible-automation-platform-27-next/hub-web-rhel9@sha256:fa8fd7d405cf171e51ddeebff57c1aeb51167bc57fb3f3a4ef1ceedef6c6b3ba
+- name: quay.io/aap/ansible-automation-platform-27-next/lightspeed-chatbot-rhel9@sha256:386d1fcf54952759b07aa2e0ec318039f20ea9e52acb0561442ff6ef3d53f342
+- name: quay.io/aap/ansible-automation-platform-27-next/lightspeed-rhel9-operator@sha256:651731ec9952785721748f5a6a02bff23963b7bc09a80a0c48df04b73283095c
+- name: quay.io/aap/ansible-automation-platform-27-next/lightspeed-rhel9@sha256:5e33e44439f597cfe954e83861fd6adabb7f57c096e86beb262afe333377f32d
+- name: quay.io/aap/ansible-automation-platform-27-next/mcp-server-rhel9@sha256:a66735bdb96c22123b960707cef79237459e29ee277f214f37f60eba8fef920d
+- name: quay.io/aap/ansible-automation-platform-27-next/mcp-tools-rhel9@sha256:ffa7192ff4e854907cd5c53a1b4a49058c32c859868b0b2924c939af11aeda6b
+- name: quay.io/aap/ansible-automation-platform-27-next/metrics-service-rhel9-operator@sha256:532012be1cbafa5161a97643036fcf980ac37af58e5d581ffa59bb429aaa811b
+- name: quay.io/aap/ansible-automation-platform-27-next/metrics-service-rhel9@sha256:9e0daa35d052909554be5d209644706438e8ffe94eeffb46c065c19737ffce22
+- name: quay.io/aap/ansible-automation-platform-27-next/platform-resource-rhel9-operator@sha256:462cda714f71426e7b261c23a4220406ababae9afe0494bf8c35b77b1c6cebfa
+- name: quay.io/aap/ansible-automation-platform-27-next/platform-resource-runner-rhel9@sha256:1262e59fa16366cc70af089f05e48d992182678e1ff395b42849ffb0afa22f9d
+- name: quay.io/aap/ansible-automation-platform/platform-operator-bundle@sha256:d04b41ec6d4bbf7902e55533045a6835456e33d1676e2fe9ddbcb0e7b6c68557
+- name: registry.redhat.io/rhel9/postgresql-15:1@sha256:5e225c1646251d2509b3a6e45fad23abfb11dd5c45d3224b59178f90deb38a70
+- name: registry.redhat.io/rhel9/redis-6:1@sha256:0962d18bb5292c0e524354f319b63287c2298a4a2fd34556c68fa285df381427
+- name: registry.redhat.io/ubi9-minimal:latest@sha256:7c5495d5fad59aaee12abc3cbbd2b283818ee1e814b00dbc7f25bf2d14fa4f0c
+# END AAP IMAGES

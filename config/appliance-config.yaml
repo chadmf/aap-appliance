@@ -1,0 +1,7 @@
+apiVersion: v1beta1
+kind: ApplianceConfig
+ocpRelease:
+  version: "4.18.34"
+  channel: stable
+  cpuArchitecture: x86_64
+enableDefaultSources: false

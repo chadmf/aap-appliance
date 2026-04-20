@@ -4,6 +4,8 @@ FROM quay.io/edge-infrastructure/openshift-appliance@sha256:3cc10f5619a11ca98749
 # Files that reference the AAP namespace use ${NAMESPACE} as a placeholder; the entrypoint
 # substitutes it before copying. Fully static files are copied unchanged.
 COPY assets/ /static/
+COPY config/ /static/config/
+COPY scripts/ /static/scripts/
 
 COPY entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh

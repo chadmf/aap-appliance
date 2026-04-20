@@ -14,3 +14,15 @@ spec:
   - source: docker.io/rancher
     mirrors:
     - registry.appliance.openshift.com:22625/rancher
+  - source: quay.io/aap/ansible-automation-platform
+    mirrors:
+    - registry.appliance.openshift.com:22625/aap/ansible-automation-platform
+  - source: quay.io/aap/ansible-automation-platform-27-next
+    mirrors:
+    - registry.appliance.openshift.com:22625/aap/ansible-automation-platform-27-next
+  - source: registry.redhat.io/ansible-automation-platform-27
+    mirrors:
+    - registry.appliance.openshift.com:22625/aap/ansible-automation-platform-27-next
+  - source: registry.redhat.io/ansible-automation-platform-27-next
+    mirrors:
+    - registry.appliance.openshift.com:22625/aap/ansible-automation-platform-27-next
