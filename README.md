@@ -44,7 +44,20 @@ The script:
 
 Review the diff with `git diff` before building.
 
-> **Note:** The pull secret must have access to `quay.io/aap`. If your standard Red Hat pull secret doesn't cover it, merge in a `quay.io/aap`-scoped credential — see [Prerequisites](#prerequisites).
+> [!IMPORTANT]
+> The pull secret must have access to `quay.io/aap`. If your standard Red Hat pull secret doesn't cover it, merge in a `quay.io/aap`-scoped credential — see [Prerequisites](#prerequisites). It should look as follows:
+>
+> ```json
+> {
+>   "quay.io/aap": {
+>     "auth": "foobar"
+>   },
+>   "quay.io": {
+>     "auth": "barbaz",
+>     "email": "someone@redhat.com"
+>   }
+> }
+> ```
 
 ## Build
 
@@ -58,10 +71,10 @@ This step bakes the static manifests into the image. It only needs to be done on
 
 ```bash
 sudo podman run --rm --privileged --net=host \
-  -e PULL_SECRET="$(cat /path/to/pull-secret.json)" \
   -e BASE_DOMAIN=example.com \
   -e RENDEZVOUS_IP=192.168.122.100 \
-  -e SSH_KEY="$(cat ~/.ssh/id_rsa.pub)" \
+  -v /path/to/pull-secret.json:/run/secrets/pull-secret:Z \
+  -v ~/.ssh/id_rsa.pub:/run/secrets/ssh-key:Z \
   -v /absolute/path/to/output:/assets:Z \
   aap-appliance:latest
 ```
@@ -72,15 +85,15 @@ The container generates config files and runs the appliance builder. The output 
 
 | ENV variable | Default | Description |
 |---|---|---|
-| `PULL_SECRET` | — | Pull secret JSON **(required)** |
 | `BASE_DOMAIN` | — | Cluster base domain, e.g. `example.com` **(required)** |
 | `RENDEZVOUS_IP` | — | IP of the SNO node **(required)** |
-| `SSH_KEY` | — | SSH public key — enables `ssh core@<rendezvous-ip>` during install |
 | `CLUSTER_NAME` | `appliance` | Cluster name (appears in the API endpoint: `api.<name>.<base-domain>`) |
 | `MACHINE_NETWORK` | `192.168.122.0/24` | CIDR of the network the node is on |
 | `DISK_SIZE_GB` | `200` | Disk size in GB for the raw image (minimum 150; ignored for `live-iso`) |
 | `NAMESPACE` | `aap` | Kubernetes namespace where AAP is deployed |
 | `APPLIANCE_FORMAT` | `raw` | `raw` for a disk image, `live-iso` for a bootable ISO |
+
+The pull secret and SSH key are read from fixed paths inside the container (`/run/secrets/pull-secret` and `/run/secrets/ssh-key`). Mount your files there with `-v` as shown above.
 
 ## Testing with a local VM
 

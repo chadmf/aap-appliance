@@ -7,10 +7,10 @@ Usage: python3 generate-configs.py
 import os, shutil, pathlib, yaml
 
 namespace        = os.environ.get('NAMESPACE', 'aap')
-pull_secret      = os.environ['PULL_SECRET']
+pull_secret      = pathlib.Path('/run/secrets/pull-secret').read_text().strip()
 base_domain      = os.environ['BASE_DOMAIN']
 rendezvous_ip    = os.environ['RENDEZVOUS_IP']
-ssh_key          = os.environ.get('SSH_KEY', '')
+ssh_key          = p.read_text().strip() if (p := pathlib.Path('/run/secrets/ssh-key')).exists() else ''
 cluster_name     = os.environ.get('CLUSTER_NAME', 'appliance')
 machine_network  = os.environ.get('MACHINE_NETWORK', '192.168.122.0/24')
 disk_size_gb     = int(os.environ.get('DISK_SIZE_GB', '200'))
