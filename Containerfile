@@ -13,8 +13,13 @@ RUN chmod +x /entrypoint.sh
 # Defaults — override at run time with -e PARAM=value.
 # Build and run both require sudo so the image is in root's store:
 #   sudo podman build -t aap-appliance:latest .
-#   sudo podman run --rm --privileged --net=host -e PULL_SECRET=... -e BASE_DOMAIN=... -e RENDEZVOUS_IP=... -v /path:/assets:Z aap-appliance:latest
-# PULL_SECRET, BASE_DOMAIN, and RENDEZVOUS_IP are required and have no defaults.
+#   sudo podman run --rm --privileged --net=host \
+#     -e BASE_DOMAIN=... -e RENDEZVOUS_IP=... \
+#     -v /path/to/pull-secret.json:/run/secrets/pull-secret:Z \
+#     -v /path/to/id_rsa.pub:/run/secrets/ssh-key:Z \
+#     -v /path:/assets:Z \
+#     aap-appliance:latest
+# /run/secrets/pull-secret is required; BASE_DOMAIN and RENDEZVOUS_IP are required and have no defaults.
 ENV CLUSTER_NAME=appliance \
     MACHINE_NETWORK=192.168.122.0/24 \
     DISK_SIZE_GB=200 \

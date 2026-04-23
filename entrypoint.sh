@@ -1,8 +1,18 @@
 #!/bin/bash
 set -euo pipefail
 
-# Validate required env vars
-for var in PULL_SECRET BASE_DOMAIN RENDEZVOUS_IP; do
+PULL_SECRET_FILE=/run/secrets/pull-secret
+SSH_KEY_FILE=/run/secrets/ssh-key
+
+# Validate required inputs
+if [ ! -f "${PULL_SECRET_FILE}" ] || [ ! -s "${PULL_SECRET_FILE}" ]; then
+    echo "error: pull secret file not found or empty at ${PULL_SECRET_FILE}" >&2
+    exit 1
+fi
+if [ ! -f "${SSH_KEY_FILE}" ]; then
+    echo "warning: no SSH key found at ${SSH_KEY_FILE}; SSH access to the node will not be configured" >&2
+fi
+for var in BASE_DOMAIN RENDEZVOUS_IP; do
     if [ -z "${!var:-}" ]; then
         echo "error: ${var} is required" >&2
         exit 1
