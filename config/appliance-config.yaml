@@ -1,7 +1,11 @@
 apiVersion: v1beta1
 kind: ApplianceConfig
 ocpRelease:
-  version: "4.18.34"
+  # binary registry requires 4.21+
+  version: "4.21.10"
   channel: stable
   cpuArchitecture: x86_64
 enableDefaultSources: false
+imageRegistry:
+  # use binary registry to avoid nested containers when running the image on Konflux
+  useBinary: true
