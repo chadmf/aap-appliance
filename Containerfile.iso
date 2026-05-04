@@ -1,0 +1,41 @@
+FROM quay.io/edge-infrastructure/openshift-appliance@sha256:3cc10f5619a11ca98749e66473db93b0eb69a27544495d09c16e111b1a147080 as builder
+
+COPY assets/ /static/
+COPY config/ /static/config/
+COPY scripts/ /static/scripts/
+COPY entrypoint.sh /entrypoint.sh
+
+# TODO: Use this parameters on build time to tweak the appliance iso content
+ARG AAP_VERSION
+ARG AUTOMATION_ORCHESTRATOR_VERSION
+ARG OCP_VERSION
+ARG ARCH
+
+# Defaults used only for CI image builds in this Containerfile.
+ENV AAP_VERSION=${AAP_VERSION} \
+    AUTOMATION_ORCHESTRATOR_VERSION=${AUTOMATION_ORCHESTRATOR_VERSION} \
+    OCP_VERSION=${OCP_VERSION} \
+    ARCH=${ARCH} \
+    BASE_DOMAIN=example.com \
+    RENDEZVOUS_IP=192.168.122.100 \
+    CLUSTER_NAME=appliance \
+    MACHINE_NETWORK=192.168.122.0/24 \
+    DISK_SIZE_GB=200 \
+    NAMESPACE=aap \
+    APPLIANCE_FORMAT=live-iso
+
+WORKDIR /
+
+# Align with upstream agent-installer-utils iso_builder: assets live under / (--dir /), then same openshift-appliance invocation as their Dockerfile.
+RUN --mount=type=secret,id=aap-appliance-image-pull-secret/.dockerconfigjson \
+    ASSETS_DIR=/ PULL_SECRET_FILE=/run/secrets/aap-appliance-image-pull-secret/.dockerconfigjson python3 /static/scripts/generate-configs.py && \
+    ln -sfn /temp /assetstemp && \
+    /openshift-appliance build live-iso --log-level debug && \
+    rm -rf /temp /cache /root/.oc-mirror && \
+    if [ -f /appliance.iso ]; then cp /appliance.iso /aap-appliance.iso; fi && \
+    test -f /aap-appliance.iso
+
+FROM scratch
+
+ARG ARCH=x86_64
+COPY --from=builder /aap-appliance.iso /aap-appliance-${ARCH}.iso

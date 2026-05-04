@@ -6,8 +6,17 @@ Usage: python3 generate-configs.py
 """
 import os, shutil, pathlib, yaml
 
+# Root directory for openshift-appliance assets (appliance-config.yaml, openshift/, cluster-config/, ...).
+# Default /assets matches runtime entrypoint.sh; ISO CI builds set ASSETS_DIR=/ to match upstream iso_builder (--dir /).
+_assets_raw = os.environ.get('ASSETS_DIR', '/assets').strip()
+if not _assets_raw or _assets_raw == '/':
+    ASSETS_DIR = pathlib.Path('/')
+else:
+    ASSETS_DIR = pathlib.Path(_assets_raw.rstrip('/'))
+
 namespace        = os.environ.get('NAMESPACE', 'aap')
-pull_secret      = pathlib.Path('/run/secrets/pull-secret').read_text().strip()
+pull_secret_path = os.environ.get('PULL_SECRET_FILE', '/run/secrets/pull-secret')
+pull_secret      = pathlib.Path(pull_secret_path).read_text().strip()
 base_domain      = os.environ['BASE_DOMAIN']
 rendezvous_ip    = os.environ['RENDEZVOUS_IP']
 ssh_key          = p.read_text().strip() if (p := pathlib.Path('/run/secrets/ssh-key')).exists() else ''
@@ -16,17 +25,22 @@ machine_network  = os.environ.get('MACHINE_NETWORK', '192.168.122.0/24')
 disk_size_gb     = int(os.environ.get('DISK_SIZE_GB', '200'))
 appliance_format = os.environ.get('APPLIANCE_FORMAT', 'raw')
 
+(ASSETS_DIR / 'openshift' / 'crs').mkdir(parents=True, exist_ok=True)
+(ASSETS_DIR / 'cluster-config').mkdir(parents=True, exist_ok=True)
+
 # Copy static manifests, substituting ${NAMESPACE}
-for src, dst in [
-    ('/static/openshift/aap.yaml',        '/assets/openshift/aap.yaml'),
-    ('/static/openshift/crs/aap-cr.yaml', '/assets/openshift/crs/aap-cr.yaml'),
+for src, rel in [
+    ('/static/openshift/aap.yaml',        'openshift/aap.yaml'),
+    ('/static/openshift/crs/aap-cr.yaml', 'openshift/crs/aap-cr.yaml'),
 ]:
+    dst = ASSETS_DIR / rel
+    dst.parent.mkdir(parents=True, exist_ok=True)
     content = pathlib.Path(src).read_text().replace('${NAMESPACE}', namespace)
-    pathlib.Path(dst).write_text(content)
+    dst.write_text(content)
 
 # Fully static files — copy unchanged
 for f in ('local-path-provisioner.yaml', 'idms-additional-images.yaml'):
-    shutil.copy(f'/static/openshift/{f}', f'/assets/openshift/{f}')
+    shutil.copy(f'/static/openshift/{f}', ASSETS_DIR / 'openshift' / f)
 
 
 def literal_block(value):
@@ -51,7 +65,7 @@ for entry in aap_images:
     cfg += f'- name: {entry["name"]}\n'
 cfg += '- name: docker.io/rancher/local-path-provisioner:v0.0.35\n'
 
-pathlib.Path('/assets/appliance-config.yaml').write_text(cfg)
+(ASSETS_DIR / 'appliance-config.yaml').write_text(cfg)
 
 # install-config.yaml — substitute env vars then append secrets
 tmpl = pathlib.Path('/static/config/install-config.yaml').read_text()
@@ -64,9 +78,9 @@ for var, val in [
 tmpl += f'pullSecret: {literal_block(pull_secret)}'
 if ssh_key:
     tmpl += f'sshKey: {literal_block(ssh_key)}'
-pathlib.Path('/assets/cluster-config/install-config.yaml').write_text(tmpl)
+(ASSETS_DIR / 'cluster-config' / 'install-config.yaml').write_text(tmpl)
 
 # agent-config.yaml — substitute env vars
 tmpl = pathlib.Path('/static/config/agent-config.yaml').read_text()
 tmpl = tmpl.replace('${RENDEZVOUS_IP}', rendezvous_ip)
-pathlib.Path('/assets/cluster-config/agent-config.yaml').write_text(tmpl)
+(ASSETS_DIR / 'cluster-config' / 'agent-config.yaml').write_text(tmpl)
