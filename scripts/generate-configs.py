@@ -14,7 +14,7 @@ if not _assets_raw or _assets_raw == '/':
 else:
     ASSETS_DIR = pathlib.Path(_assets_raw.rstrip('/'))
 
-namespace        = os.environ.get('NAMESPACE', 'aap')
+aap_namespace        = os.environ.get('AAP_NAMESPACE', 'aap')
 pull_secret_path = os.environ.get('PULL_SECRET_FILE', '/run/secrets/pull-secret')
 pull_secret      = pathlib.Path(pull_secret_path).read_text().strip()
 base_domain      = os.environ['BASE_DOMAIN']
@@ -24,23 +24,28 @@ cluster_name     = os.environ.get('CLUSTER_NAME', 'appliance')
 machine_network  = os.environ.get('MACHINE_NETWORK', '192.168.122.0/24')
 disk_size_gb     = int(os.environ.get('DISK_SIZE_GB', '200'))
 appliance_format = os.environ.get('APPLIANCE_FORMAT', 'raw')
+disconnected     = os.environ.get('DISCONNECTED', '').lower() in ('1', 'true', 'yes')
+aap_prerelease   = os.environ.get('AAP_PRERELEASE', '').lower() in ('1', 'true', 'yes')
 
 (ASSETS_DIR / 'openshift' / 'crs').mkdir(parents=True, exist_ok=True)
 (ASSETS_DIR / 'cluster-config').mkdir(parents=True, exist_ok=True)
 
 # Copy static manifests, substituting ${NAMESPACE}
+aap_src = '/static/openshift/aap-prerelease.yaml' if aap_prerelease else '/static/openshift/aap.yaml'
 for src, rel in [
-    ('/static/openshift/aap.yaml',        'openshift/aap.yaml'),
+    (aap_src,                             'openshift/aap.yaml'),
     ('/static/openshift/crs/aap-cr.yaml', 'openshift/crs/aap-cr.yaml'),
 ]:
     dst = ASSETS_DIR / rel
     dst.parent.mkdir(parents=True, exist_ok=True)
-    content = pathlib.Path(src).read_text().replace('${NAMESPACE}', namespace)
+    content = pathlib.Path(src).read_text().replace('${AAP_NAMESPACE}', aap_namespace)
     dst.write_text(content)
 
 # Fully static files — copy unchanged
 for f in ('local-path-provisioner.yaml', 'idms-additional-images.yaml'):
     shutil.copy(f'/static/openshift/{f}', ASSETS_DIR / 'openshift' / f)
+if aap_prerelease:
+    shutil.copy('/static/openshift/idms-aap-prerelease.yaml', ASSETS_DIR / 'openshift' / 'idms-aap-prerelease.yaml')
 
 
 def literal_block(value):
@@ -59,7 +64,8 @@ cfg += f'pullSecret: {literal_block(pull_secret)}'
 if ssh_key:
     cfg += f'sshKey: {literal_block(ssh_key)}'
 
-aap_images = yaml.safe_load(pathlib.Path('/static/config/aap-images.yaml').read_text())
+aap_images_file = '/static/config/aap-images-prerelease.yaml' if aap_prerelease else '/static/config/aap-images.yaml'
+aap_images = yaml.safe_load(pathlib.Path(aap_images_file).read_text())
 cfg += 'additionalImages:\n'
 for entry in aap_images:
     cfg += f'- name: {entry["name"]}\n'
@@ -75,7 +81,8 @@ for var, val in [
     ('${MACHINE_NETWORK}', machine_network),
 ]:
     tmpl = tmpl.replace(var, val)
-tmpl += f'pullSecret: {literal_block(pull_secret)}'
+install_pull_secret = '{"auths":{"":{"auth":"dXNlcjpwYXNz"}}}' if disconnected else pull_secret
+tmpl += f'pullSecret: {literal_block(install_pull_secret)}'
 if ssh_key:
     tmpl += f'sshKey: {literal_block(ssh_key)}'
 (ASSETS_DIR / 'cluster-config' / 'install-config.yaml').write_text(tmpl)

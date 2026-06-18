@@ -29,23 +29,27 @@ The built image includes:
 
 ## Updating AAP image pins
 
-The AAP operator images in `config/aap-images.yaml` are pinned to specific digests resolved from `registry.redhat.io/redhat/redhat-operator-index:v4.22`. Run this script before rebuilding to pick up the latest released digests:
+Image digests are pinned in `config/aap-images.yaml` (released) or `config/aap-images-prerelease.yaml` (pre-release). Run this script before rebuilding to pick up the latest digests:
 
 ```bash
+# Released (default) — pulls from registry.redhat.io/redhat/redhat-operator-index:v4.22
 ./scripts/update-aap-images.sh --authfile /path/to/pull-secret.json
+
+# Pre-release — pulls from quay.io/aap/ansible-automation-platform/operator-index:2.7-next
+./scripts/update-aap-images.sh --authfile /path/to/pull-secret.json --prerelease
 ```
 
 The script:
-1. Resolves the current digest for `redhat-operator-index:v4.22`
-2. Extracts the AAP channel head bundle from the catalog
+1. Resolves the current index digest
+2. Extracts the AAP `stable-2.7` channel head bundle from the catalog
 3. Extracts `relatedImages` from the bundle's CSV manifest
-4. Rewrites `config/aap-images.yaml` with the index + all bundle relatedImages
-5. Updates `startingCSV` in `assets/openshift/aap.yaml`
+4. Rewrites the appropriate `aap-images*.yaml` with the index + all bundle relatedImages
+5. Updates the CatalogSource image digest and `startingCSV` in the corresponding `aap*.yaml`
 
 Review the diff with `git diff` before building.
 
 > [!IMPORTANT]
-> The pull secret must have access to `quay.io/aap`. If your standard Red Hat pull secret doesn't cover it, merge in a `quay.io/aap`-scoped credential — see [Prerequisites](#prerequisites). It should look as follows:
+> For `--prerelease`, the pull secret must have access to `quay.io/aap`. If your standard Red Hat pull secret doesn't cover it, merge in a `quay.io/aap`-scoped credential:
 >
 > ```json
 > {
@@ -90,8 +94,10 @@ The container generates config files and runs the appliance builder. The output 
 | `CLUSTER_NAME` | `appliance` | Cluster name (appears in the API endpoint: `api.<name>.<base-domain>`) |
 | `MACHINE_NETWORK` | `192.168.122.0/24` | CIDR of the network the node is on |
 | `DISK_SIZE_GB` | `200` | Disk size in GB for the raw image (minimum 150; ignored for `live-iso`) |
-| `NAMESPACE` | `aap` | Kubernetes namespace where AAP is deployed |
-| `APPLIANCE_FORMAT` | `raw` | `raw` for a disk image, `live-iso` for a bootable ISO |
+| `AAP_NAMESPACE` | `aap` | Kubernetes namespace where AAP is deployed |
+| `APPLIANCE_FORMAT` | `live-iso` | `live-iso` for a bootable ISO, `raw` for a disk image |
+| `DISCONNECTED` | `true` | Use a dummy pull secret in `install-config.yaml`; the real pull secret is still used by the appliance builder for registry caching |
+| `AAP_PRERELEASE` | `false` | Set to `true` to use pre-release AAP from `quay.io/aap` instead of the released `registry.redhat.io` index |
 
 The pull secret and SSH key are read from fixed paths inside the container (`/run/secrets/pull-secret` and `/run/secrets/ssh-key`). Mount your files there with `-v` as shown above.
 

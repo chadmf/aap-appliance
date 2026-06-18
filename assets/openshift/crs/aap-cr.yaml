@@ -3,4 +3,4 @@ apiVersion: aap.ansible.com/v1alpha1
 kind: AnsibleAutomationPlatform
 metadata:
   name: aap
-  namespace: ${NAMESPACE}
+  namespace: ${AAP_NAMESPACE}

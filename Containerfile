@@ -1,7 +1,7 @@
 FROM quay.io/edge-infrastructure/openshift-appliance@sha256:bff07cb9d68768a2689e1dd9b0fc38fca9ad6cebd34fa16a1d9a319aedd3b20c
 
 # Static manifests — baked in at image build time; entrypoint copies to /assets at run time.
-# Files that reference the AAP namespace use ${NAMESPACE} as a placeholder; the entrypoint
+# Files that reference the AAP namespace use ${AAP_NAMESPACE} as a placeholder; the entrypoint
 # substitutes it before copying. Fully static files are copied unchanged.
 COPY assets/ /static/
 COPY config/ /static/config/
@@ -23,7 +23,9 @@ RUN chmod +x /entrypoint.sh
 ENV CLUSTER_NAME=appliance \
     MACHINE_NETWORK=192.168.122.0/24 \
     DISK_SIZE_GB=200 \
-    NAMESPACE=aap \
-    APPLIANCE_FORMAT=raw
+    AAP_NAMESPACE=aap \
+    APPLIANCE_FORMAT=live-iso \
+    DISCONNECTED=true \
+    AAP_PRERELEASE=false
 
 ENTRYPOINT ["/entrypoint.sh"]
