@@ -27,11 +27,11 @@ spec:
   - name: dockerfile
     value: Containerfile.iso
   - name: aap-version
-    value: "2.7-next"
+    value: "2.7"
   - name: automation-orchestrator-version
     value: main
   - name: ocp-version
-    value: "4.21.10"
+    value: "4.22.0"
   timeouts:
     pipeline: 4h
   pipelineRef:

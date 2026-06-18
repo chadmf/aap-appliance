@@ -37,7 +37,8 @@ ln -sfn /assets/temp /assetstemp
 # Generate the agent config ISO using the openshift-install binary cached by the build step.
 # openshift-install deletes install-config.yaml and agent-config.yaml after reading them,
 # so work in a temp dir to preserve the originals in cluster-config/.
-OCP_INSTALL="/assets/cache/4.18.34-x86_64/openshift-install"
+OCP_VERSION=$(python3 -c "import yaml,sys; cfg=yaml.safe_load(open('/static/config/appliance-config.yaml')); print(cfg['ocpRelease']['version'])")
+OCP_INSTALL="/assets/cache/${OCP_VERSION}-x86_64/openshift-install"
 TMPDIR=$(mktemp -d)
 trap 'rm -rf "$TMPDIR"' EXIT
 

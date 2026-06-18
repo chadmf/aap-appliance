@@ -1,4 +1,4 @@
-FROM quay.io/edge-infrastructure/openshift-appliance@sha256:3cc10f5619a11ca98749e66473db93b0eb69a27544495d09c16e111b1a147080 as builder
+FROM quay.io/edge-infrastructure/openshift-appliance@sha256:bff07cb9d68768a2689e1dd9b0fc38fca9ad6cebd34fa16a1d9a319aedd3b20c as builder
 
 COPY assets/ /static/
 COPY config/ /static/config/

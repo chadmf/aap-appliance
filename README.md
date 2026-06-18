@@ -23,24 +23,24 @@ The image is built on top of the [openshift-appliance](https://github.com/opensh
 
 The built image includes:
 - OCP 4.18 SNO
-- AAP operator (2.7-next-ns) installed from the baked-in catalog
+- AAP operator (2.7) installed via the built-in redhat-operators catalog
 - Rancher local-path-provisioner as the default StorageClass (hostPath-backed, supports RWX)
 - All required images pre-cached in the appliance local registry — no external pulls during install
 
 ## Updating AAP image pins
 
-The AAP operator images in `entrypoint.sh` and the CatalogSource in `assets/openshift/aap.yaml` are pinned to specific digests. The `operator-index:2.7-next` tag moves as new builds are published — run this script before rebuilding to pick up the latest:
+The AAP operator images in `config/aap-images.yaml` are pinned to specific digests resolved from `registry.redhat.io/redhat/redhat-operator-index:v4.22`. Run this script before rebuilding to pick up the latest released digests:
 
 ```bash
 ./scripts/update-aap-images.sh --authfile /path/to/pull-secret.json
 ```
 
 The script:
-1. Resolves current digests for `operator-index:2.7-next` and `platform-operator-bundle:2.7-next-ns`
-2. Verifies the bundle digest is referenced by the index (cross-check)
-3. Extracts `spec.relatedImages` from the bundle's CSV manifest
+1. Resolves the current digest for `redhat-operator-index:v4.22`
+2. Extracts the AAP channel head bundle from the catalog
+3. Extracts `relatedImages` from the bundle's CSV manifest
 4. Rewrites `config/aap-images.yaml` with the index + all bundle relatedImages
-5. Updates the CatalogSource `spec.image` digest in `assets/openshift/aap.yaml`
+5. Updates `startingCSV` in `assets/openshift/aap.yaml`
 
 Review the diff with `git diff` before building.
 

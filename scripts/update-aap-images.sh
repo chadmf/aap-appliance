@@ -14,7 +14,7 @@
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-INDEX_TAG="quay.io/aap/ansible-automation-platform/operator-index:2.7-next"
+INDEX_TAG="registry.redhat.io/redhat/redhat-operator-index:v4.22"
 AUTHFILE=""
 
 while [[ $# -gt 0 ]]; do
@@ -37,7 +37,7 @@ INDEX_DIGEST=$(skopeo inspect --authfile "$AUTHFILE" "docker://$INDEX_TAG" \
     | python3 -c "import sys,json; print(json.load(sys.stdin)['Digest'])")
 echo "    index:  $INDEX_DIGEST"
 
-INDEX_REF="quay.io/aap/ansible-automation-platform/operator-index@$INDEX_DIGEST"
+INDEX_REF="registry.redhat.io/redhat/redhat-operator-index@$INDEX_DIGEST"
 
 echo "==> Extracting catalog.json from index ..."
 podman run --rm --entrypoint cat \
@@ -125,28 +125,21 @@ lines.append("# END AAP IMAGES")
 images_yaml.write_text("\n".join(lines) + "\n")
 print(f"    updated {images_yaml}")
 
-# Update CatalogSource image digest in aap.yaml
-local_ref = (
-    "registry.appliance.openshift.com:22625/aap/ansible-automation-platform/operator-index@"
+# Update CatalogSource image digest and startingCSV in Subscription (aap.yaml)
+local_index_ref = (
+    "registry.appliance.openshift.com:22625/redhat/redhat-operator-index@"
     + index_ref.split("@")[1]
 )
 content = aap_yaml.read_text()
 content = re.sub(
-    r'  image: registry\.appliance\.openshift\.com:22625/aap/ansible-automation-platform/operator-index@sha256:\S+',
-    f'  image: {local_ref}',
+    r'  image: registry\.appliance\.openshift\.com:22625/redhat/redhat-operator-index@sha256:\S+',
+    f'  image: {local_index_ref}',
     content
 )
-# Update or insert startingCSV in Subscription
 if re.search(r'  startingCSV:', content):
     content = re.sub(r'  startingCSV: \S+', f'  startingCSV: {head_name}', content)
-else:
-    content = re.sub(
-        r'(  source: cs-aap-2-7-next-ns)',
-        f'  startingCSV: {head_name}\n\\1',
-        content
-    )
 aap_yaml.write_text(content)
-print(f"    updated {aap_yaml}")
+print(f"    updated {aap_yaml} (startingCSV: {head_name})")
 PYEOF
 
 echo ""

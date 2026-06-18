@@ -16,12 +16,12 @@ spec:
 apiVersion: operators.coreos.com/v1alpha1
 kind: CatalogSource
 metadata:
-  name: cs-aap-2-7-next-ns
+  name: redhat-operator-index
   namespace: openshift-marketplace
 spec:
   sourceType: grpc
-  image: registry.appliance.openshift.com:22625/aap/ansible-automation-platform/operator-index@sha256:fd5ffd2ea7a5e06c28762ad57200f9941dd58551c866627695edc5c241e045f2
-  displayName: AAP 2.7-next-ns
+  image: registry.appliance.openshift.com:22625/redhat/redhat-operator-index@sha256:f15cd7441ebe96345c908bccde833a0f2e56275f011bac222192ca1feaa53a17
+  displayName: Red Hat Operators
   publisher: Red Hat
 ---
 apiVersion: operators.coreos.com/v1alpha1
@@ -33,6 +33,6 @@ spec:
   channel: stable-2.7
   name: ansible-automation-platform-operator
   installPlanApproval: Automatic
-  startingCSV: aap-operator.v2.7.0-0.1776445599
-  source: cs-aap-2-7-next-ns
+  startingCSV: aap-operator.v2.7.0-0.1781122804
+  source: redhat-operator-index
   sourceNamespace: openshift-marketplace
