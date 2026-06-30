@@ -1,0 +1,18 @@
+# AO operator images + CloudNativePG images to pre-cache in the appliance registry (pre-release / quay.io/aap).
+# Managed by scripts/update-ao-images.sh — do not edit manually.
+# BEGIN AO IMAGES
+- name: ghcr.io/cloudnative-pg/cloudnative-pg@sha256:badb30338c32df9e0a1caea5a8013b1ace02e9a25f8d03f29b5e3a2dd285ab4f
+- name: ghcr.io/cloudnative-pg/postgresql:15@sha256:04598d2058f446fcbc3416838740e515e7d39c311d0bca57778b50c302db1ae5
+- name: ghcr.io/cloudnative-pg/postgresql@sha256:1c97e0d6e94d8b335be7f258eeda2202966df5fde0c934eef4b13c760ec6a891
+- name: ghcr.io/cloudnative-pg/postgresql@sha256:ee2e3ce7f0ea935c3f4ab245c0b3959c9f1c49816ae02222ceb6bc347f48e43b
+- name: mirror.gcr.io/openpolicyagent/opa:1.4.2-static@sha256:3c995dc8a59f6ddfd92eb7404d2f7ff9fe71cd025d9251199957a8a6afbfd76e
+- name: quay.io/aap/ansible-automation-platform/automation-orchestrator-backend-rhel9@sha256:deb830648818b81c9c9071f4155ea4e9c5404d1284dd425e603a767944eba76f
+- name: quay.io/aap/ansible-automation-platform/automation-orchestrator-operator-bundle@sha256:167eab2124447961f908ad166dad618e04d67686204482c22dd469da5a1a61c2
+- name: quay.io/aap/ansible-automation-platform/automation-orchestrator-operator-index@sha256:57f7dd6c2276481ebf206fb45ad82b0274c82b4781200a70b4cb77f1025dc217
+- name: quay.io/aap/ansible-automation-platform/automation-orchestrator-rhel9-operator@sha256:1f2ea9890409eec3027b44a149a1c0ffc551b5c8689aa7dc0a1022969e664551
+- name: quay.io/aap/ansible-automation-platform/automation-orchestrator-temporal-rhel9@sha256:2fb8ca151b243d760d3306d4e859c7c7fc71cfea5a9f0411a575afc6f09547f1
+- name: quay.io/aap/ansible-automation-platform/automation-orchestrator-ui-rhel9@sha256:474613641672a1a010c718fff55628f9209bdcc3b61c51ab5bb55d576be2aa52
+- name: quay.io/operatorhubio/catalog@sha256:5a370fc5ebbd430353cb8546e3128ba81932c4dd7cade9b1e34f70d0639b3f2c
+- name: quay.io/operatorhubio/cloudnative-pg@sha256:152c6ff3b86f84dea1f2d8cd15a36a912867c93a2a48a5b5872932e151578ade
+- name: registry.redhat.io/rhel9/redis-6@sha256:4e220dbc3218fa19513de06b94f6bb16c2d6a52aa9d002393d11d6976ce81a94
+# END AO IMAGES

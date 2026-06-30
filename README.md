@@ -1,8 +1,13 @@
 # AAP Appliance Builder
 
-Builds an OpenShift Single Node (SNO) appliance disk image with Ansible Automation Platform (AAP) pre-baked. When the image is cloned to hardware or a VM and booted, it installs OCP 4.18 and deploys AAP fully offline — no internet access required at install time.
+Builds an OpenShift Single Node (SNO) appliance disk image with Red Hat automation products pre-baked. When the image is cloned to hardware or a VM and booted, it installs OCP and deploys the selected products fully offline — no internet access required at install time.
 
-The image is built on top of the [openshift-appliance](https://github.com/openshift/appliance) tool. This repo bakes in the static OCP and AAP manifests so the only inputs you need to provide at build time are your site-specific parameters.
+Supported products (controlled by `APPLIANCE_CONTENT`):
+- **`aap`** (default) — Ansible Automation Platform 2.7
+- **`ao`** — Automation Orchestrator + CloudNativePG
+- **`aap-ao`** — both products together
+
+The image is built on top of the [openshift-appliance](https://github.com/openshift/appliance) tool. This repo bakes in the static OCP and product manifests so the only inputs you need to provide at build time are your site-specific parameters.
 
 ## Prerequisites
 
@@ -21,15 +26,18 @@ The image is built on top of the [openshift-appliance](https://github.com/opensh
 | `cluster-config/auth/kubeconfig` | Cluster kubeconfig for use after installation |
 | `cluster-config/auth/kubeadmin-password` | Initial admin password |
 
-The built image includes:
-- OCP 4.18 SNO
-- AAP operator (2.7) installed via the built-in redhat-operators catalog
+The built image includes (depending on `APPLIANCE_CONTENT`):
+- OCP SNO
+- **AAP** (`aap`, `aap-ao`): AAP operator 2.7 installed via the certified-operators catalog
+- **AO** (`ao`, `aap-ao`): Automation Orchestrator operator (pre-release) + CloudNativePG operator
 - Rancher local-path-provisioner as the default StorageClass (hostPath-backed, supports RWX)
 - All required images pre-cached in the appliance local registry — no external pulls during install
 
-## Updating AAP image pins
+## Updating image pins
 
-Image digests are pinned in `config/aap-images.yaml` (released) or `config/aap-images-prerelease.yaml` (pre-release). Run this script before rebuilding to pick up the latest digests:
+Image digests are pinned in `config/` and managed by update scripts. Run the appropriate script(s) before each rebuild to pick up the latest digests.
+
+### AAP images
 
 ```bash
 # Released (default) — pulls from registry.redhat.io/redhat/redhat-operator-index:v4.22
@@ -39,17 +47,27 @@ Image digests are pinned in `config/aap-images.yaml` (released) or `config/aap-i
 ./scripts/update-aap-images.sh --authfile /path/to/pull-secret.json --prerelease
 ```
 
-The script:
-1. Resolves the current index digest
-2. Extracts the AAP `stable-2.7` channel head bundle from the catalog
-3. Extracts `relatedImages` from the bundle's CSV manifest
-4. Rewrites the appropriate `aap-images*.yaml` with the index + all bundle relatedImages
-5. Updates the CatalogSource image digest and `startingCSV` in the corresponding `aap*.yaml`
+The script resolves the current operator index digest, finds the `stable-2.7` channel head, extracts all `relatedImages`, and rewrites `config/aap-images*.yaml` and the CatalogSource digest + `startingCSV` in `assets/openshift/aap*.yaml`.
 
-Review the diff with `git diff` before building.
+### AO images
+
+```bash
+./scripts/update-ao-images.sh --authfile /path/to/pull-secret.json
+```
+
+The script:
+1. Resolves the AO operator index (`quay.io/aap/.../automation-orchestrator-operator-index:main`) digest
+2. Finds the AO channel head and extracts `relatedImages`
+3. Resolves the CloudNativePG bundle from `quay.io/operatorhubio/catalog` (OperatorHub community catalog — the Red Hat OCI indexes do not carry `cloudnative-pg` for OCP 4.22)
+4. Writes the merged image list to `config/ao-images-prerelease.yaml`
+5. Updates the AO and `redhat-operator-index` CatalogSource digests, AO `startingCSV`, and channel names in `assets/openshift/ao-prerelease.yaml`
+
+For `APPLIANCE_CONTENT=aap-ao` builds, run **both** update scripts to keep all digests current. The `redhat-operator-index` digest appears in both `aap.yaml` and `ao-prerelease.yaml`; the scripts keep them in sync independently.
+
+Review all changes with `git diff` before building.
 
 > [!IMPORTANT]
-> For `--prerelease`, the pull secret must have access to `quay.io/aap`. If your standard Red Hat pull secret doesn't cover it, merge in a `quay.io/aap`-scoped credential:
+> The pull secret must have access to `quay.io/aap` for pre-release indexes. If your standard Red Hat pull secret doesn't cover it, merge in a `quay.io/aap`-scoped credential:
 >
 > ```json
 > {
@@ -94,10 +112,14 @@ The container generates config files and runs the appliance builder. The output 
 | `CLUSTER_NAME` | `appliance` | Cluster name (appears in the API endpoint: `api.<name>.<base-domain>`) |
 | `MACHINE_NETWORK` | `192.168.122.0/24` | CIDR of the network the node is on |
 | `DISK_SIZE_GB` | `200` | Disk size in GB for the raw image (minimum 150; ignored for `live-iso`) |
+| `APPLIANCE_CONTENT` | `aap` | Products to include: `aap`, `ao`, or `aap-ao` |
 | `AAP_NAMESPACE` | `aap` | Kubernetes namespace where AAP is deployed |
+| `AAP_PRERELEASE` | `false` | Set to `true` to use pre-release AAP from `quay.io/aap` instead of the released `registry.redhat.io` index |
+| `AO_NAMESPACE` | `automation-orchestrator` | Kubernetes namespace where Automation Orchestrator is deployed |
+| `AO_PRERELEASE` | `true` | Set to `false` to use a GA AO release (not yet available; reserved for future use) |
+
 | `APPLIANCE_FORMAT` | `live-iso` | `live-iso` for a bootable ISO, `raw` for a disk image |
 | `DISCONNECTED` | `true` | Use a dummy pull secret in `install-config.yaml`; the real pull secret is still used by the appliance builder for registry caching |
-| `AAP_PRERELEASE` | `false` | Set to `true` to use pre-release AAP from `quay.io/aap` instead of the released `registry.redhat.io` index |
 
 The pull secret and SSH key are read from fixed paths inside the container (`/run/secrets/pull-secret` and `/run/secrets/ssh-key`). Mount your files there with `-v` as shown above.
 
@@ -226,7 +248,16 @@ oc get clusteroperators
 oc get aap -n aap -w
 ```
 
-The local-path-provisioner is already running as the default StorageClass. The appliance automatically applies the AAP CR once the operator CRD is registered.
+The local-path-provisioner is already running as the default StorageClass. The appliance automatically applies operator CRs once the operator CRDs are registered.
+
+```bash
+# AAP (APPLIANCE_CONTENT=aap or aap-ao)
+oc get aap -n aap -w
+
+# AO (APPLIANCE_CONTENT=ao or aap-ao)
+oc get automationorchestrator -n automation-orchestrator -w
+oc get cluster -n automation-orchestrator -w   # CloudNativePG cluster
+```
 
 ## Cleanup
 

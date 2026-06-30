@@ -23,9 +23,12 @@ RUN chmod +x /entrypoint.sh
 ENV CLUSTER_NAME=appliance \
     MACHINE_NETWORK=192.168.122.0/24 \
     DISK_SIZE_GB=200 \
+    APPLIANCE_CONTENT=aap \
     AAP_NAMESPACE=aap \
+    AAP_PRERELEASE=false \
+    AO_NAMESPACE=automation-orchestrator \
+    AO_PRERELEASE=true \
     APPLIANCE_FORMAT=live-iso \
-    DISCONNECTED=true \
-    AAP_PRERELEASE=false
+    DISCONNECTED=true
 
 ENTRYPOINT ["/entrypoint.sh"]

@@ -54,35 +54,17 @@ TMPDIR=$(mktemp -d)
 trap 'rm -rf "$TMPDIR"' EXIT
 
 echo "==> Resolving index digest ..."
-INDEX_DIGEST="sha256:$(skopeo inspect --raw --authfile "$AUTHFILE" "docker://$INDEX_TAG" \
-    | sha256sum | cut -d' ' -f1)"
+INDEX_DIGEST="$(skopeo inspect --format '{{.Digest}}' --authfile "$AUTHFILE" "docker://$INDEX_TAG")"
 echo "    index:  $INDEX_DIGEST"
 
 INDEX_REF="${INDEX_TAG%:*}@$INDEX_DIGEST"
 
-echo "==> Rendering AAP catalog entries from index (this pulls the index image) ..."
+echo "==> Rendering AAP catalog entries from index ..."
 REGISTRY_AUTH_FILE="$AUTHFILE" opm render "$INDEX_REF" --output=json \
-    | python3 -c "
-import sys, json
-pkg = 'ansible-automation-platform-operator'
-buf = ''
-decoder = json.JSONDecoder()
-for line in sys.stdin:
-    buf += line
-    while True:
-        buf = buf.lstrip()
-        if not buf:
-            break
-        try:
-            obj, end = decoder.raw_decode(buf)
-            buf = buf[end:]
-            if obj.get('package') == pkg or (obj.get('schema') == 'olm.package' and obj.get('name') == pkg):
-                print(json.dumps(obj))
-        except json.JSONDecodeError:
-            break
-" > "$TMPDIR/catalog.ndjson"
+    | jq -c 'select(.package == "ansible-automation-platform-operator" or (.schema == "olm.package" and .name == "ansible-automation-platform-operator"))' \
+    > "$TMPDIR/catalog.ndjson"
 
-echo "==> Parsing catalog for stable-2.7 head bundle and relatedImages ..."
+echo "==> Parsing catalog ..."
 python3 - "$INDEX_REF" "$TMPDIR/catalog.ndjson" \
          "$IMAGES_YAML" "$AAP_YAML" "$LOCAL_REGISTRY_PREFIX" "$IMAGES_YAML_HEADER" <<'PYEOF'
 import sys, re, json, pathlib
@@ -134,12 +116,11 @@ if bundle_obj is None:
     sys.exit(1)
 
 bundle_ref = bundle_obj["image"]
-print(f"    bundle ref:   {bundle_ref}")
 
 related = bundle_obj.get("relatedImages", [])
 images = {entry["image"] for entry in related if "image" in entry}
 images.add(bundle_ref)
-print(f"    images to cache: {len(images)}")
+print(f"    images: {len(images)}")
 
 # Write images yaml
 lines = images_yaml_header.splitlines()

@@ -1,0 +1,70 @@
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: cloudnative-pg
+spec: {}
+---
+apiVersion: operators.coreos.com/v1
+kind: OperatorGroup
+metadata:
+  name: cloudnative-pg
+  namespace: cloudnative-pg
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: ${AO_NAMESPACE}
+---
+apiVersion: operators.coreos.com/v1
+kind: OperatorGroup
+metadata:
+  name: automation-orchestrator-operator
+  namespace: ${AO_NAMESPACE}
+---
+apiVersion: operators.coreos.com/v1alpha1
+kind: CatalogSource
+metadata:
+  name: cs-automation-orchestrator
+  namespace: openshift-marketplace
+spec:
+  sourceType: grpc
+  image: registry.appliance.openshift.com:22625/aap/ansible-automation-platform/automation-orchestrator-operator-index@sha256:57f7dd6c2276481ebf206fb45ad82b0274c82b4781200a70b4cb77f1025dc217
+  displayName: Automation Orchestrator
+  publisher: Red Hat
+---
+apiVersion: operators.coreos.com/v1alpha1
+kind: CatalogSource
+metadata:
+  name: cs-operatorhub
+  namespace: openshift-marketplace
+spec:
+  sourceType: grpc
+  image: registry.appliance.openshift.com:22625/operatorhubio/catalog@sha256:5a370fc5ebbd430353cb8546e3128ba81932c4dd7cade9b1e34f70d0639b3f2c
+  displayName: OperatorHub Community
+  publisher: OperatorHub.io
+---
+apiVersion: operators.coreos.com/v1alpha1
+kind: Subscription
+metadata:
+  name: cloudnative-pg
+  namespace: cloudnative-pg
+spec:
+  channel: stable-v1
+  installPlanApproval: Automatic
+  name: cloudnative-pg
+  source: cs-operatorhub
+  sourceNamespace: openshift-marketplace
+---
+apiVersion: operators.coreos.com/v1alpha1
+kind: Subscription
+metadata:
+  name: automation-orchestrator-operator
+  namespace: ${AO_NAMESPACE}
+spec:
+  channel: candidate
+  installPlanApproval: Automatic
+  name: automation-orchestrator-operator
+  startingCSV: automation-orchestrator-operator.v0.0.1
+  source: cs-automation-orchestrator
+  sourceNamespace: openshift-marketplace
