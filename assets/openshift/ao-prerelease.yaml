@@ -29,7 +29,7 @@ metadata:
   namespace: openshift-marketplace
 spec:
   sourceType: grpc
-  image: registry.appliance.openshift.com:22625/aap/ansible-automation-platform/automation-orchestrator-operator-index@sha256:57f7dd6c2276481ebf206fb45ad82b0274c82b4781200a70b4cb77f1025dc217
+  image: registry.appliance.openshift.com:22625/aap/ansible-automation-platform/automation-orchestrator-operator-index@sha256:8b75a9b3e3d2340c09db9cc4037baf4c03d9064a91a51eb9caee72d7c632e125
   displayName: Automation Orchestrator
   publisher: Red Hat
 ---
@@ -40,7 +40,7 @@ metadata:
   namespace: openshift-marketplace
 spec:
   sourceType: grpc
-  image: registry.appliance.openshift.com:22625/operatorhubio/catalog@sha256:5a370fc5ebbd430353cb8546e3128ba81932c4dd7cade9b1e34f70d0639b3f2c
+  image: registry.appliance.openshift.com:22625/operatorhubio/catalog@sha256:0c9af1f3dce7e8799b3f6d3f0f9843cbc7664ccc97ab970849de99d54c905e0c
   displayName: OperatorHub Community
   publisher: OperatorHub.io
 ---
