@@ -1,6 +1,7 @@
 #!/bin/bash
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 QCOW2_PATH="${QCOW2_PATH:-}"
 VM_MAC="${VM_MAC:-52:54:00:aa:bb:01}"
 VM_MEMORY="${VM_MEMORY:-32768}"
@@ -58,6 +59,8 @@ sudo virt-install \
     --import
 
 sudo virsh autostart "$VM_NAME"
+
+"$SCRIPT_DIR/setup-port-forwarding.sh"
 
 echo ""
 echo "VM '$VM_NAME' started."
