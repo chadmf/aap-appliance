@@ -24,7 +24,7 @@ mkdir -p /assets/openshift/crs /assets/cluster-config
 python3 /static/scripts/generate-configs.py
 
 BUILD_ARGS="build"
-if [ "${APPLIANCE_FORMAT:-raw}" = "live-iso" ]; then
+if [ "${APPLIANCE_FORMAT:-live-iso}" = "live-iso" ]; then
     BUILD_ARGS="build live-iso"
 fi
 

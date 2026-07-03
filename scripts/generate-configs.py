@@ -25,7 +25,7 @@ ssh_key          = p.read_text().strip() if (p := pathlib.Path('/run/secrets/ssh
 cluster_name     = os.environ.get('CLUSTER_NAME', 'appliance')
 machine_network  = os.environ.get('MACHINE_NETWORK', '192.168.122.0/24')
 disk_size_gb     = int(os.environ.get('DISK_SIZE_GB', '200'))
-appliance_format = os.environ.get('APPLIANCE_FORMAT', 'raw')
+appliance_format = os.environ.get('APPLIANCE_FORMAT', 'live-iso')
 disconnected     = os.environ.get('DISCONNECTED', '').lower() in ('1', 'true', 'yes')
 aap_prerelease   = os.environ.get('AAP_PRERELEASE', '').lower() in ('1', 'true', 'yes')
 ao_prerelease    = os.environ.get('AO_PRERELEASE', 'true').lower() in ('1', 'true', 'yes')
