@@ -109,6 +109,7 @@ The container generates config files and runs the appliance builder. The output 
 |---|---|---|
 | `BASE_DOMAIN` | — | Cluster base domain, e.g. `example.com` **(required)** |
 | `RENDEZVOUS_IP` | — | IP of the SNO node **(required)** |
+| `CPU_ARCHITECTURE` | `x86_64` | CPU architecture of the OCP release: `x86_64` or `aarch64` |
 | `CLUSTER_NAME` | `appliance` | Cluster name (appears in the API endpoint: `api.<name>.<base-domain>`) |
 | `MACHINE_NETWORK` | `192.168.122.0/24` | CIDR of the network the node is on |
 | `DISK_SIZE_GB` | `200` | Disk size in GB for the raw image (minimum 150; ignored for `live-iso`) |

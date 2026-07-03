@@ -3,7 +3,7 @@ kind: ApplianceConfig
 ocpRelease:
   version: "4.22.0"
   channel: stable
-  cpuArchitecture: x86_64
+  cpuArchitecture: ${CPU_ARCHITECTURE}
 enableDefaultSources: false
 imageRegistry:
   useBinary: true

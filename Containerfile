@@ -20,7 +20,8 @@ RUN chmod +x /entrypoint.sh
 #     -v /path:/assets:Z \
 #     aap-appliance:latest
 # /run/secrets/pull-secret is required; BASE_DOMAIN and RENDEZVOUS_IP are required and have no defaults.
-ENV CLUSTER_NAME=appliance \
+ENV CPU_ARCHITECTURE=x86_64 \
+    CLUSTER_NAME=appliance \
     MACHINE_NETWORK=192.168.122.0/24 \
     DISK_SIZE_GB=200 \
     APPLIANCE_CONTENT=aap \

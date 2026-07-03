@@ -30,6 +30,12 @@ disconnected     = os.environ.get('DISCONNECTED', '').lower() in ('1', 'true', '
 aap_prerelease   = os.environ.get('AAP_PRERELEASE', '').lower() in ('1', 'true', 'yes')
 ao_prerelease    = os.environ.get('AO_PRERELEASE', 'true').lower() in ('1', 'true', 'yes')
 
+cpu_architecture = os.environ.get('CPU_ARCHITECTURE', 'x86_64')
+if cpu_architecture not in ('x86_64', 'aarch64'):
+    raise SystemExit(
+        f"error: CPU_ARCHITECTURE must be one of: x86_64, aarch64 (got {cpu_architecture!r})"
+    )
+
 appliance_content = os.environ.get('APPLIANCE_CONTENT', 'aap').lower()
 if appliance_content not in ('aap', 'ao', 'aap-ao'):
     raise SystemExit(
@@ -87,6 +93,7 @@ def literal_block(value):
 
 # appliance-config.yaml — start from static template, inject secrets and images
 cfg = pathlib.Path('/static/config/appliance-config.yaml').read_text()
+cfg = cfg.replace('${CPU_ARCHITECTURE}', cpu_architecture)
 if appliance_format != 'live-iso':
     cfg += f'diskSizeGB: {disk_size_gb}\n'
 cfg += f'pullSecret: {literal_block(pull_secret)}'
