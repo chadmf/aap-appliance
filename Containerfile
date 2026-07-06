@@ -20,6 +20,9 @@ RUN chmod +x /entrypoint.sh
 #     -v /path:/assets:Z \
 #     aap-appliance:latest
 # /run/secrets/pull-secret is required; BASE_DOMAIN and RENDEZVOUS_IP are required and have no defaults.
+# Set SKIP_APPLIANCE_BUILD=true to skip the slow openshift-appliance build and regenerate only the
+# agentconfig ISO from an existing cache. Requires a prior successful build's /assets/ dir to be
+# mounted, or OPENSHIFT_INSTALL_BIN set to the path of a matching openshift-install binary.
 ENV CPU_ARCHITECTURE=x86_64 \
     CLUSTER_NAME=appliance \
     MACHINE_NETWORK=192.168.122.0/24 \
@@ -30,6 +33,7 @@ ENV CPU_ARCHITECTURE=x86_64 \
     AO_NAMESPACE=automation-orchestrator \
     AO_PRERELEASE=true \
     APPLIANCE_FORMAT=live-iso \
-    DISCONNECTED=true
+    DISCONNECTED=true \
+    SKIP_APPLIANCE_BUILD=false
 
 ENTRYPOINT ["/entrypoint.sh"]
