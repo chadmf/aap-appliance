@@ -14,6 +14,10 @@ if not _assets_raw or _assets_raw == '/':
 else:
     ASSETS_DIR = pathlib.Path(_assets_raw.rstrip('/'))
 
+# Root directory for static template files baked into the container image.
+# Default /static matches the container layout; override in tests via STATIC_DIR.
+STATIC_DIR = pathlib.Path(os.environ.get('STATIC_DIR', '/static'))
+
 aap_namespace        = os.environ.get('AAP_NAMESPACE', 'aap')
 ao_namespace         = os.environ.get('AO_NAMESPACE', 'automation-orchestrator')
 ao_db_password       = _secrets.token_urlsafe(24)
@@ -21,7 +25,8 @@ pull_secret_path = os.environ.get('PULL_SECRET_FILE', '/run/secrets/pull-secret'
 pull_secret      = pathlib.Path(pull_secret_path).read_text().strip()
 base_domain      = os.environ['BASE_DOMAIN']
 rendezvous_ip    = os.environ['RENDEZVOUS_IP']
-ssh_key          = p.read_text().strip() if (p := pathlib.Path('/run/secrets/ssh-key')).exists() else ''
+ssh_key_path     = os.environ.get('SSH_KEY_FILE', '/run/secrets/ssh-key')
+ssh_key          = p.read_text().strip() if (p := pathlib.Path(ssh_key_path)).exists() else ''
 cluster_name     = os.environ.get('CLUSTER_NAME', 'appliance')
 machine_network  = os.environ.get('MACHINE_NETWORK', '192.168.122.0/24')
 disk_size_gb     = int(os.environ.get('DISK_SIZE_GB', '200'))
@@ -49,38 +54,38 @@ include_ao  = appliance_content in ('ao', 'aap-ao')
 
 # AAP manifests
 if include_aap:
-    aap_src = '/static/openshift/aap-prerelease.yaml' if aap_prerelease else '/static/openshift/aap.yaml'
+    aap_src = STATIC_DIR / 'openshift' / ('aap-prerelease.yaml' if aap_prerelease else 'aap.yaml')
     dst = ASSETS_DIR / 'openshift' / 'aap.yaml'
     dst.parent.mkdir(parents=True, exist_ok=True)
-    dst.write_text(pathlib.Path(aap_src).read_text().replace('${AAP_NAMESPACE}', aap_namespace))
-    shutil.copy('/static/openshift/crs/aap-cr.yaml', ASSETS_DIR / 'openshift' / 'crs' / 'aap-cr.yaml')
+    dst.write_text(aap_src.read_text().replace('${AAP_NAMESPACE}', aap_namespace))
+    shutil.copy(STATIC_DIR / 'openshift' / 'crs' / 'aap-cr.yaml', ASSETS_DIR / 'openshift' / 'crs' / 'aap-cr.yaml')
     if aap_prerelease:
         shutil.copy(
-            '/static/openshift/idms-aap-prerelease.yaml',
+            STATIC_DIR / 'openshift' / 'idms-aap-prerelease.yaml',
             ASSETS_DIR / 'openshift' / 'idms-aap-prerelease.yaml',
         )
 
 # AO manifests
 if include_ao:
-    ao_src = '/static/openshift/ao-prerelease.yaml' if ao_prerelease else '/static/openshift/ao.yaml'
+    ao_src = STATIC_DIR / 'openshift' / ('ao-prerelease.yaml' if ao_prerelease else 'ao.yaml')
     dst = ASSETS_DIR / 'openshift' / 'ao.yaml'
     dst.parent.mkdir(parents=True, exist_ok=True)
-    dst.write_text(pathlib.Path(ao_src).read_text().replace('${AO_NAMESPACE}', ao_namespace))
+    dst.write_text(ao_src.read_text().replace('${AO_NAMESPACE}', ao_namespace))
     ao_cr = (
-        pathlib.Path('/static/openshift/crs/ao-cr.yaml').read_text()
+        (STATIC_DIR / 'openshift' / 'crs' / 'ao-cr.yaml').read_text()
         .replace('${AO_NAMESPACE}', ao_namespace)
         .replace('${AO_DB_PASSWORD}', ao_db_password)
     )
     (ASSETS_DIR / 'openshift' / 'crs' / 'ao-cr.yaml').write_text(ao_cr)
     if ao_prerelease:
         shutil.copy(
-            '/static/openshift/idms-ao-prerelease.yaml',
+            STATIC_DIR / 'openshift' / 'idms-ao-prerelease.yaml',
             ASSETS_DIR / 'openshift' / 'idms-ao-prerelease.yaml',
         )
 
 # Fully static files — copy unchanged
 for f in ('local-path-provisioner.yaml', 'idms-additional-images.yaml'):
-    shutil.copy(f'/static/openshift/{f}', ASSETS_DIR / 'openshift' / f)
+    shutil.copy(STATIC_DIR / 'openshift' / f, ASSETS_DIR / 'openshift' / f)
 
 
 def literal_block(value):
@@ -92,7 +97,7 @@ def literal_block(value):
 
 
 # appliance-config.yaml — start from static template, inject secrets and images
-cfg = pathlib.Path('/static/config/appliance-config.yaml').read_text()
+cfg = (STATIC_DIR / 'config' / 'appliance-config.yaml').read_text()
 cfg = cfg.replace('${CPU_ARCHITECTURE}', cpu_architecture)
 if appliance_format != 'live-iso':
     cfg += f'diskSizeGB: {disk_size_gb}\n'
@@ -103,17 +108,11 @@ if ssh_key:
 # Collect and deduplicate images across all included products
 all_images: list[dict] = []
 if include_aap:
-    aap_images_file = (
-        '/static/config/aap-images-prerelease.yaml' if aap_prerelease
-        else '/static/config/aap-images.yaml'
-    )
-    all_images.extend(yaml.safe_load(pathlib.Path(aap_images_file).read_text()) or [])
+    aap_images_file = STATIC_DIR / 'config' / ('aap-images-prerelease.yaml' if aap_prerelease else 'aap-images.yaml')
+    all_images.extend(yaml.safe_load(aap_images_file.read_text()) or [])
 if include_ao:
-    ao_images_file = (
-        '/static/config/ao-images-prerelease.yaml' if ao_prerelease
-        else '/static/config/ao-images.yaml'
-    )
-    all_images.extend(yaml.safe_load(pathlib.Path(ao_images_file).read_text()) or [])
+    ao_images_file = STATIC_DIR / 'config' / ('ao-images-prerelease.yaml' if ao_prerelease else 'ao-images.yaml')
+    all_images.extend(yaml.safe_load(ao_images_file.read_text()) or [])
 
 seen: set[str] = set()
 cfg += 'additionalImages:\n'
@@ -126,7 +125,7 @@ cfg += '- name: docker.io/rancher/local-path-provisioner:v0.0.35\n'
 (ASSETS_DIR / 'appliance-config.yaml').write_text(cfg)
 
 # install-config.yaml — substitute env vars then append secrets
-tmpl = pathlib.Path('/static/config/install-config.yaml').read_text()
+tmpl = (STATIC_DIR / 'config' / 'install-config.yaml').read_text()
 for var, val in [
     ('${BASE_DOMAIN}',     base_domain),
     ('${CLUSTER_NAME}',    cluster_name),
@@ -140,6 +139,6 @@ if ssh_key:
 (ASSETS_DIR / 'cluster-config' / 'install-config.yaml').write_text(tmpl)
 
 # agent-config.yaml — substitute env vars
-tmpl = pathlib.Path('/static/config/agent-config.yaml').read_text()
+tmpl = (STATIC_DIR / 'config' / 'agent-config.yaml').read_text()
 tmpl = tmpl.replace('${RENDEZVOUS_IP}', rendezvous_ip)
 (ASSETS_DIR / 'cluster-config' / 'agent-config.yaml').write_text(tmpl)
