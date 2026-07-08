@@ -1,12 +1,12 @@
 # AAP operator images to pre-cache in the appliance registry.
 # Managed by scripts/update-aap-images.sh — do not edit manually.
 # BEGIN AAP IMAGES
-- name: registry.redhat.io/redhat/redhat-operator-index@sha256:d8d6c133f1307855eb2f588233c44a5aeb1604d9881ab423144c85355a2818a3
+- name: registry.redhat.io/redhat/redhat-operator-index@sha256:bf449839ff91f015603c91bd377374e6ef49514d47cca47b2d1fd3e74ae8b83e
 - name: registry.redhat.io/ansible-automation-platform-27/controller-rhel9-operator@sha256:9950ec116ae0cbdee9e0b7d0f8cda5a26d6768fe47d4e118ee136d89ea55d9f9
 - name: registry.redhat.io/ansible-automation-platform-27/controller-rhel9@sha256:9964ac3ddb1f4b2494f6e40f777d49aa9523e7823f3fb2ec74bf9021e886c3b2
-- name: registry.redhat.io/ansible-automation-platform-27/eda-controller-rhel9-operator@sha256:0d1dd0f5f1fb950f6e5938b804e07c850e9d340bd479fc525d5151d46016aa86
-- name: registry.redhat.io/ansible-automation-platform-27/eda-controller-rhel9@sha256:e0e0141f0edbf04ac84cafcf9df752726200083fb5e4326a6e5d890bdc0ed65e
-- name: registry.redhat.io/ansible-automation-platform-27/eda-controller-ui-rhel9@sha256:73a39a05a76a03414a233e2e14f6ce80636c3a9ea8b3b2120e9119e4da931bad
+- name: registry.redhat.io/ansible-automation-platform-27/eda-controller-rhel9-operator@sha256:ffa1378136aee98a8c01e4b0faef32aa0a4d46350978b51bf0240721f58c5ef4
+- name: registry.redhat.io/ansible-automation-platform-27/eda-controller-rhel9@sha256:5dc2c6e6f7d92a8af1eae782e847d6b62e7453b07e00bd41491b54db0a7cfe8c
+- name: registry.redhat.io/ansible-automation-platform-27/eda-controller-ui-rhel9@sha256:1503aa4a98c47497d2e8263fa15d6de5cdfe0b1f4affa1a3c0370b97c3c1a735
 - name: registry.redhat.io/ansible-automation-platform-27/ee-minimal-rhel9@sha256:fcb043c9bcb58e0c613949fbe8d9f6c421ed629b0d19e7a1122d9f668e353303
 - name: registry.redhat.io/ansible-automation-platform-27/ee-supported-rhel9@sha256:5b8544f742c89c1ef82b20d784a81808187c779c10d05ff21f789fb8c44f36ea
 - name: registry.redhat.io/ansible-automation-platform-27/gateway-proxy-rhel9@sha256:eda33a192b8befe473b5a40a14111adfc65644d2db54de50c74b4d2f011b3d58
@@ -24,7 +24,7 @@
 - name: registry.redhat.io/ansible-automation-platform-27/metrics-service-rhel9@sha256:a71bffb020e917a1c82362574c68e2b950b30da9ff6a2bcce39bcbf9d7266201
 - name: registry.redhat.io/ansible-automation-platform-27/platform-resource-rhel9-operator@sha256:b38d3eebc22148c48ac304d9d2792a89382c7c2d9e672b9a66edcc41d97e7dee
 - name: registry.redhat.io/ansible-automation-platform-27/platform-resource-runner-rhel9@sha256:ed5dc141931c7f152cbdbce4129131e33660107e122c430e8a7254ca3dd87c88
-- name: registry.redhat.io/ansible-automation-platform/platform-operator-bundle@sha256:32560cdb08b7da9d671f9b035e595971c5bdf865c56eb6825b9a4910add1b9cf
+- name: registry.redhat.io/ansible-automation-platform/platform-operator-bundle@sha256:56c701ab118c1b91ff55af524e69d2c8970784c185e13950fc13b3ff495f05d2
 - name: registry.redhat.io/rhel9/postgresql-15:1@sha256:a762c63ffa9f3c9611a521843495d53495fbcae1234a97ef0e8b1fadfb825db1
 - name: registry.redhat.io/rhel9/redis-6:1@sha256:7324e230c9b09cf37ad0cb4c04895bd7652ae6c840f1cce4663995314f1e102f
 - name: registry.redhat.io/ubi9-minimal:latest@sha256:ae09ecc3d754bc1726cbda3e2599cc7839e09fe1cc547ce173cf669b645be3cc

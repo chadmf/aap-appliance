@@ -20,7 +20,7 @@ metadata:
   namespace: openshift-marketplace
 spec:
   sourceType: grpc
-  image: registry.appliance.openshift.com:22625/redhat/redhat-operator-index@sha256:d8d6c133f1307855eb2f588233c44a5aeb1604d9881ab423144c85355a2818a3
+  image: registry.appliance.openshift.com:22625/redhat/redhat-operator-index@sha256:bf449839ff91f015603c91bd377374e6ef49514d47cca47b2d1fd3e74ae8b83e
   displayName: Red Hat Operators
   publisher: Red Hat
 ---
@@ -33,6 +33,6 @@ spec:
   channel: stable-2.7
   name: ansible-automation-platform-operator
   installPlanApproval: Automatic
-  startingCSV: aap-operator.v2.7.0-0.1781122804
+  startingCSV: aap-operator.v2.7.0-0.1781768237
   source: redhat-operator-index
   sourceNamespace: openshift-marketplace
