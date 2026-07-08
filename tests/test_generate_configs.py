@@ -261,6 +261,111 @@ class TestCustomNamespaces:
         assert '${RENDEZVOUS_IP}' not in agent_cfg
 
 
+# ── Static network config (GATEWAY / VM_MAC / DNS_SERVER) ────────────────────
+
+class TestNetworkConfig:
+    @pytest.fixture
+    def gateway_env(self, base_env):
+        return {**base_env, 'GATEWAY': '192.168.56.1', 'VM_MAC': '52:54:00:aa:bb:01',
+                'MACHINE_NETWORK': '192.168.56.0/24'}
+
+    def _agent_cfg(self, assets_dir):
+        return yaml.safe_load((assets_dir / 'cluster-config' / 'agent-config.yaml').read_text())
+
+    def test_no_hosts_section_by_default(self, base_env, assets_dir):
+        result = run(base_env)
+        assert result.returncode == 0, result.stderr
+        assert 'hosts' not in self._agent_cfg(assets_dir)
+
+    def test_gateway_appears_in_routes(self, gateway_env, assets_dir):
+        result = run(gateway_env)
+        assert result.returncode == 0, result.stderr
+        cfg = self._agent_cfg(assets_dir)
+        routes = cfg['hosts'][0]['networkConfig']['routes']['config']
+        assert routes[0]['next-hop-address'] == '192.168.56.1'
+
+    def test_mac_in_interface(self, gateway_env, assets_dir):
+        result = run(gateway_env)
+        assert result.returncode == 0, result.stderr
+        cfg = self._agent_cfg(assets_dir)
+        iface = cfg['hosts'][0]['networkConfig']['interfaces'][0]
+        assert iface['mac-address'] == '52:54:00:aa:bb:01'
+
+    def test_mac_normalizes_dashes(self, base_env, assets_dir):
+        env = {**base_env, 'GATEWAY': '192.168.56.1', 'VM_MAC': '08-00-27-61-6A-4A'}
+        result = run(env)
+        assert result.returncode == 0, result.stderr
+        cfg = self._agent_cfg(assets_dir)
+        iface = cfg['hosts'][0]['networkConfig']['interfaces'][0]
+        assert iface['mac-address'] == '08:00:27:61:6a:4a'
+
+    def test_vm_mac_0_takes_precedence(self, base_env, assets_dir):
+        env = {**base_env, 'GATEWAY': '192.168.56.1',
+               'VM_MAC_0': 'aa:bb:cc:dd:ee:ff', 'VM_MAC': '11:22:33:44:55:66'}
+        result = run(env)
+        assert result.returncode == 0, result.stderr
+        cfg = self._agent_cfg(assets_dir)
+        iface = cfg['hosts'][0]['networkConfig']['interfaces'][0]
+        assert iface['mac-address'] == 'aa:bb:cc:dd:ee:ff'
+
+    def test_vm_mac_alias(self, gateway_env, assets_dir):
+        env = {k: v for k, v in gateway_env.items() if k != 'VM_MAC_0'}
+        env['VM_MAC'] = '52:54:00:aa:bb:01'
+        result = run(env)
+        assert result.returncode == 0, result.stderr
+        cfg = self._agent_cfg(assets_dir)
+        assert cfg['hosts'][0]['networkConfig']['interfaces'][0]['mac-address'] == '52:54:00:aa:bb:01'
+
+    def test_default_dns_server(self, gateway_env, assets_dir):
+        result = run(gateway_env)
+        assert result.returncode == 0, result.stderr
+        cfg = self._agent_cfg(assets_dir)
+        servers = cfg['hosts'][0]['networkConfig']['dns-resolver']['config']['server']
+        assert servers == ['8.8.8.8']
+
+    def test_custom_dns_server(self, gateway_env, assets_dir):
+        env = {**gateway_env, 'DNS_SERVER': '1.1.1.1'}
+        result = run(env)
+        assert result.returncode == 0, result.stderr
+        cfg = self._agent_cfg(assets_dir)
+        servers = cfg['hosts'][0]['networkConfig']['dns-resolver']['config']['server']
+        assert servers == ['1.1.1.1']
+
+    def test_static_ip_uses_rendezvous_ip(self, gateway_env, assets_dir):
+        result = run(gateway_env)
+        assert result.returncode == 0, result.stderr
+        cfg = self._agent_cfg(assets_dir)
+        addrs = cfg['hosts'][0]['networkConfig']['interfaces'][0]['ipv4']['address']
+        assert addrs[0]['ip'] == '192.168.100.1'  # base_env RENDEZVOUS_IP
+
+    def test_prefix_length_from_machine_network(self, gateway_env, assets_dir):
+        result = run(gateway_env)
+        assert result.returncode == 0, result.stderr
+        cfg = self._agent_cfg(assets_dir)
+        addrs = cfg['hosts'][0]['networkConfig']['interfaces'][0]['ipv4']['address']
+        assert addrs[0]['prefix-length'] == 24
+
+    def test_identifier_is_mac_address(self, gateway_env, assets_dir):
+        result = run(gateway_env)
+        assert result.returncode == 0, result.stderr
+        cfg = self._agent_cfg(assets_dir)
+        iface = cfg['hosts'][0]['networkConfig']['interfaces'][0]
+        assert iface['identifier'] == 'mac-address'
+
+    def test_no_dhcp_on_interface(self, gateway_env, assets_dir):
+        result = run(gateway_env)
+        assert result.returncode == 0, result.stderr
+        cfg = self._agent_cfg(assets_dir)
+        ipv4 = cfg['hosts'][0]['networkConfig']['interfaces'][0]['ipv4']
+        assert ipv4['dhcp'] is False
+
+    def test_gateway_without_mac_errors(self, base_env):
+        env = {**base_env, 'GATEWAY': '192.168.56.1'}
+        result = run(env)
+        assert result.returncode != 0
+        assert 'VM_MAC' in result.stderr
+
+
 # ── Error cases ───────────────────────────────────────────────────────────────
 
 class TestErrorCases:

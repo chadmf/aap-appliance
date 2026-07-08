@@ -112,6 +112,9 @@ The container generates config files and runs the appliance builder. The output 
 | `CPU_ARCHITECTURE` | `x86_64` | CPU architecture of the OCP release: `x86_64` or `aarch64` |
 | `CLUSTER_NAME` | `appliance` | Cluster name (appears in the API endpoint: `api.<name>.<base-domain>`) |
 | `MACHINE_NETWORK` | `192.168.122.0/24` | CIDR of the network the node is on |
+| `GATEWAY` | _(unset)_ | Default route gateway. When set, bakes a static NMState network config into `agent-config.yaml` — bypasses DHCP entirely. Required when the hypervisor DHCP server does not send options 3 or 6 (e.g. VirtualBox). Must be paired with `VM_MAC` or `VM_MAC_0`. |
+| `VM_MAC` | _(unset)_ | MAC address of the rendezvous NIC. Required when `GATEWAY` is set. Accepts colon-separated (`52:54:00:aa:bb:01`) or dash-separated (`08-00-27-61-6A-4A`) format. Use the same value as the `--mac` flag in `launch-appliance.sh`. `VM_MAC_0` takes precedence if both are set. |
+| `DNS_SERVER` | `8.8.8.8` | DNS nameserver for the rendezvous node. Only used when `GATEWAY` is set. |
 | `DISK_SIZE_GB` | `200` | Disk size in GB for the raw image (minimum 150; ignored for `live-iso`) |
 | `APPLIANCE_CONTENT` | `aap` | Products to include: `aap`, `ao`, or `aap-ao` |
 | `AAP_NAMESPACE` | `aap` | Kubernetes namespace where AAP is deployed |
@@ -124,75 +127,132 @@ The container generates config files and runs the appliance builder. The output 
 
 The pull secret and SSH key are read from fixed paths inside the container (`/run/secrets/pull-secret` and `/run/secrets/ssh-key`). Mount your files there with `-v` as shown above.
 
+### VirtualBox networking
+
+> [!NOTE]
+> VirtualBox's built-in DHCP server has a known bug: it never transmits DHCP options 3 (gateway) and 6 (DNS) to clients, regardless of the server configuration. Without a gateway the installed RHCOS has no default route, causing the OVN-K MTU prober to fail. Without DNS, bootstrap services cannot reach each other by hostname.
+>
+> Work around this by passing the gateway and MAC address at build time so the appliance bakes static network config into the agent-config ISO:
+>
+> ```bash
+> sudo podman run --rm --privileged --net=host \
+>   -e BASE_DOMAIN=example.com \
+>   -e RENDEZVOUS_IP=192.168.56.10 \
+>   -e MACHINE_NETWORK=192.168.56.0/24 \
+>   -e GATEWAY=192.168.56.1 \
+>   -e VM_MAC=08:00:27:61:6a:4a \
+>   -v /path/to/pull-secret.json:/run/secrets/pull-secret:Z \
+>   -v ~/.ssh/id_rsa.pub:/run/secrets/ssh-key:Z \
+>   -v /absolute/path/to/output:/assets:Z \
+>   aap-appliance:latest
+> ```
+>
+> Set `RENDEZVOUS_IP` to the static IP you want the VM to use and `MACHINE_NETWORK` to the VirtualBox host-only network CIDR. `GATEWAY` is the host-only adapter IP on your laptop (typically `192.168.56.1`). `VM_MAC` must match the MAC configured for the VM's host-only NIC. No DHCP reservation is needed when using static config.
+
 ## Testing with a local VM
 
-### Raw disk image
+The `scripts/` directory contains convenience scripts for every step. All scripts accept `--help` / unknown flags to print usage.
 
-Copy the built assets to the libvirt image pool (QEMU requires files outside your home directory):
+| Script | Purpose |
+|---|---|
+| [`scripts/libvirt-prereqs.sh`](scripts/libvirt-prereqs.sh) | Install and enable libvirt/KVM on the host (run once) |
+| [`scripts/dhcp-reserve.sh`](scripts/dhcp-reserve.sh) | Add a DHCP reservation so the VM always gets `RENDEZVOUS_IP` |
+| [`scripts/launch-appliance.sh`](scripts/launch-appliance.sh) | Create a libvirt VM from build output (live-iso or raw) |
+| [`scripts/boot-appliance.sh`](scripts/boot-appliance.sh) | Boot a pre-built qcow2 image with port forwarding configured |
+| [`scripts/setup-port-forwarding.sh`](scripts/setup-port-forwarding.sh) | Add nftables DNAT rules forwarding ports 80, 443, 6443 to the VM |
+| [`scripts/launch-appliance-vbox.sh`](scripts/launch-appliance-vbox.sh) | Create a VirtualBox VM from build output |
+| [`scripts/import-appliance-vbox.sh`](scripts/import-appliance-vbox.sh) | Import a pre-built appliance OVA into VirtualBox |
 
-```bash
-sudo cp /path/to/output/appliance.raw /var/lib/libvirt/images/aap-appliance.raw
-sudo cp /path/to/output/cluster-config/agentconfig.noarch.iso /var/lib/libvirt/images/agentconfig.noarch.iso
-```
+### VirtualBox
 
-Add a DHCP reservation so the VM always gets the rendezvous IP (the MAC here is an example; use any stable MAC):
+`launch-appliance-vbox.sh` creates the VM from scratch with these settings:
 
-```bash
-sudo virsh net-update default add ip-dhcp-host \
-  '<host mac="52:54:00:aa:bb:01" ip="192.168.122.100"/>' \
-  --live --config
-```
+| Setting | Value | Why |
+|---|---|---|
+| Firmware | EFI | RHCOS requires UEFI boot |
+| NIC type | virtio | Better performance and compatibility than the default e1000 |
+| NIC MAC | matches `VM_MAC` build param | Static IP config is keyed to this MAC during installation |
+| Hardware clock | UTC | RHCOS always expects hardware clock in UTC; without this the VM clock is offset by the host timezone, causing TLS cert errors after install |
+| Paravirt provider | KVM | Improves guest performance on Linux hosts |
+| Networking | host-only (vboxnet0) | Isolates the VM on a private network reachable from your laptop |
 
-Boot a VM from the appliance image with the config ISO attached as a CD-ROM:
+`import-appliance-vbox.sh` only applies host-only networking after import — all other settings (firmware, NIC type, memory, CPUs, hardware clock) come from the OVF that was embedded in the OVA at export time. The MAC is **not** set on import; VirtualBox assigns a random one, which does not affect the installed cluster because OVN-K migrated the static IP to a MAC-independent `br-ex` bridge during installation.
 
-```bash
-sudo virt-install \
-  --name aap-appliance \
-  --memory 32768 \
-  --vcpus 8 \
-  --disk path=/var/lib/libvirt/images/aap-appliance.raw,format=raw,bus=virtio \
-  --disk path=/var/lib/libvirt/images/agentconfig.noarch.iso,device=cdrom,readonly=on \
-  --network network=default,model=virtio,mac=52:54:00:aa:bb:01 \
-  --os-variant rhel9-unknown \
-  --events on_reboot=restart,on_poweroff=restart,on_crash=restart \
-  --boot hd \
-  --noautoconsole \
-  --import
-```
+No DHCP server is needed — the appliance uses the static IP baked into the agent-config ISO at build time.
 
-> **Note:** The VM needs at least 32 GB RAM and 8 vCPUs. `--import` skips OS installation — the appliance handles everything from the raw image. The MAC in `--network` must match the DHCP reservation above. Do not over-allocate RAM relative to the host; the OOM killer will crash the VM mid-install.
+#### Builder workflow — create a VM from build output
 
-### Live ISO
-
-With `APPLIANCE_FORMAT=live-iso` you get `appliance.iso` instead of `appliance.raw`. The ISO boots directly — no disk pre-imaging required. You provide an empty disk for OCP to install onto.
+After running the `podman run` build, use `scripts/launch-appliance-vbox.sh` to create a VirtualBox VM from the resulting ISOs (analogous to `launch-appliance.sh` for libvirt):
 
 ```bash
-sudo cp /path/to/output/appliance.iso /var/lib/libvirt/images/aap-appliance.iso
-sudo cp /path/to/output/cluster-config/agentconfig.noarch.iso /var/lib/libvirt/images/agentconfig.noarch.iso
+VM_MAC=08:00:27:61:6a:4a \
+RENDEZVOUS_IP=192.168.56.100 \
+./scripts/launch-appliance-vbox.sh --output-dir ./build
 ```
+
+This creates a fresh VM, attaches `appliance.iso` and `agentconfig.noarch.iso`, and starts the installer. Once OCP is fully installed you can export the running VM as an OVA to distribute to others.
+
+#### Distribution workflow — import a pre-built OVA
+
+If you have a fully-installed appliance OVA (exported from a VM created by `launch-appliance-vbox.sh`), use `scripts/import-appliance-vbox.sh` to import it on any VirtualBox host:
 
 ```bash
-sudo virsh net-update default add ip-dhcp-host \
-  '<host mac="52:54:00:aa:bb:01" ip="192.168.122.100"/>' \
-  --live --config
+RENDEZVOUS_IP=192.168.56.100 \
+./scripts/import-appliance-vbox.sh --ova appliance.ova
 ```
+
+This sets up `vboxnet0`, imports the OVA, applies all required VM settings, and starts the cluster. No MAC pinning is needed — the static IP config was resolved during installation and is stored on the installed disk as MAC-independent NetworkManager profiles on the `br-ex` OVN-K bridge. VirtualBox's default random MAC on import does not affect the cluster.
+
+Use `--replace` to destroy and recreate an existing VM of the same name.
+
+### libvirt (KVM)
+
+#### Prerequisites
+
+Install and enable libvirt/KVM (run once on a fresh host):
 
 ```bash
-sudo virt-install \
-  --name aap-appliance \
-  --memory 32768 \
-  --vcpus 8 \
-  --disk size=200,bus=virtio \
-  --disk path=/var/lib/libvirt/images/aap-appliance.iso,device=cdrom,readonly=on \
-  --disk path=/var/lib/libvirt/images/agentconfig.noarch.iso,device=cdrom,readonly=on \
-  --network network=default,model=virtio,mac=52:54:00:aa:bb:01 \
-  --os-variant rhel9-unknown \
-  --events on_reboot=restart,on_poweroff=restart,on_crash=restart \
-  --boot hd,cdrom \
-  --noautoconsole
+./scripts/libvirt-prereqs.sh
 ```
 
-> **Note:** `--boot hd,cdrom` lets the first boot fall through to the ISO (the disk is empty), and subsequent reboots after bootstrap boot from the installed OCP on the disk.
+#### Live ISO (default)
+
+Add a DHCP reservation so the VM always gets the rendezvous IP, then create and boot the VM:
+
+```bash
+./scripts/dhcp-reserve.sh --mac 52:54:00:aa:bb:01 --ip 192.168.122.100
+
+VM_MAC=52:54:00:aa:bb:01 \
+./scripts/launch-appliance.sh --output-dir /path/to/build
+```
+
+`launch-appliance.sh` copies the ISOs to the libvirt image pool and calls `virt-install`. Use `--replace` to destroy and recreate an existing VM of the same name.
+
+#### Raw disk image
+
+```bash
+./scripts/dhcp-reserve.sh --mac 52:54:00:aa:bb:01 --ip 192.168.122.100
+
+VM_MAC=52:54:00:aa:bb:01 \
+APPLIANCE_FORMAT=raw \
+./scripts/launch-appliance.sh --output-dir /path/to/build
+```
+
+#### Booting a pre-built qcow2
+
+If you have a qcow2 image of a fully installed appliance, `boot-appliance.sh` imports it and sets up port forwarding (ports 80, 443, 6443) so the cluster API and console are reachable from the host:
+
+```bash
+./scripts/boot-appliance.sh --qcow2 /path/to/appliance.qcow2
+```
+
+Port forwarding can also be configured separately (e.g. after a network restart):
+
+```bash
+RENDEZVOUS_IP=192.168.122.100 ./scripts/setup-port-forwarding.sh
+```
+
+> **Note:** The VM needs at least 32 GB RAM and 8 vCPUs. Do not over-allocate RAM relative to the host; the OOM killer will crash the VM mid-install.
 
 ## Monitoring installation
 

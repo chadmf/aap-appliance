@@ -4,7 +4,7 @@ from the static templates in /static/config/ and environment variables.
 
 Usage: python3 generate-configs.py
 """
-import os, secrets as _secrets, shutil, pathlib, yaml
+import ipaddress, os, secrets as _secrets, shutil, pathlib, yaml
 
 # Root directory for openshift-appliance assets (appliance-config.yaml, openshift/, cluster-config/, ...).
 # Default /assets matches runtime entrypoint.sh; ISO CI builds set ASSETS_DIR=/ to match upstream iso_builder (--dir /).
@@ -29,7 +29,13 @@ ssh_key_path     = os.environ.get('SSH_KEY_FILE', '/run/secrets/ssh-key')
 ssh_key          = p.read_text().strip() if (p := pathlib.Path(ssh_key_path)).exists() else ''
 cluster_name     = os.environ.get('CLUSTER_NAME', 'appliance')
 machine_network  = os.environ.get('MACHINE_NETWORK', '192.168.122.0/24')
+gateway          = os.environ.get('GATEWAY', '')
+vm_mac           = os.environ.get('VM_MAC_0', os.environ.get('VM_MAC', '')).lower().replace('-', ':')
+dns_server       = os.environ.get('DNS_SERVER', '8.8.8.8')
 disk_size_gb     = int(os.environ.get('DISK_SIZE_GB', '200'))
+
+if gateway and not vm_mac:
+    raise SystemExit("error: GATEWAY requires VM_MAC (or VM_MAC_0) to be set")
 appliance_format = os.environ.get('APPLIANCE_FORMAT', 'live-iso')
 disconnected     = os.environ.get('DISCONNECTED', '').lower() in ('1', 'true', 'yes')
 aap_prerelease   = os.environ.get('AAP_PRERELEASE', '').lower() in ('1', 'true', 'yes')
@@ -138,7 +144,37 @@ if ssh_key:
     tmpl += f'sshKey: {literal_block(ssh_key)}'
 (ASSETS_DIR / 'cluster-config' / 'install-config.yaml').write_text(tmpl)
 
-# agent-config.yaml — substitute env vars
+# agent-config.yaml — substitute rendezvousIP, optionally append static network config
 tmpl = (STATIC_DIR / 'config' / 'agent-config.yaml').read_text()
 tmpl = tmpl.replace('${RENDEZVOUS_IP}', rendezvous_ip)
+if gateway:
+    net = ipaddress.ip_network(machine_network, strict=False)
+    hosts = [{
+        'interfaces': [{'name': 'eth0', 'macAddress': vm_mac}],
+        'networkConfig': {
+            'interfaces': [{
+                'name': 'eth0',
+                'type': 'ethernet',
+                'state': 'up',
+                'identifier': 'mac-address',
+                'mac-address': vm_mac,
+                'ipv4': {
+                    'enabled': True,
+                    'dhcp': False,
+                    'address': [{'ip': rendezvous_ip, 'prefix-length': net.prefixlen}],
+                },
+            }],
+            'routes': {
+                'config': [{
+                    'destination': '0.0.0.0/0',
+                    'next-hop-address': gateway,
+                    'next-hop-interface': 'eth0',
+                }],
+            },
+            'dns-resolver': {
+                'config': {'server': [dns_server]},
+            },
+        },
+    }]
+    tmpl += yaml.dump({'hosts': hosts}, default_flow_style=False, sort_keys=False)
 (ASSETS_DIR / 'cluster-config' / 'agent-config.yaml').write_text(tmpl)

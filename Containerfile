@@ -1,5 +1,12 @@
 FROM quay.io/edge-infrastructure/openshift-appliance@sha256:bff07cb9d68768a2689e1dd9b0fc38fca9ad6cebd34fa16a1d9a319aedd3b20c
 
+# nmstate is required by openshift-install to validate networkConfig in agent-config.yaml.
+RUN rm -f /etc/yum.repos.d/base-4-20-rhel9.repo && \
+    printf '[c9s-baseos]\nname=CentOS Stream 9 BaseOS\nbaseurl=https://mirror.stream.centos.org/9-stream/BaseOS/x86_64/os/\ngpgcheck=0\nenabled=1\n\n[c9s-appstream]\nname=CentOS Stream 9 AppStream\nbaseurl=https://mirror.stream.centos.org/9-stream/AppStream/x86_64/os/\ngpgcheck=0\nenabled=1\n' > /etc/yum.repos.d/centos-stream.repo && \
+    microdnf install -y nmstate && \
+    microdnf clean all && \
+    rm -f /etc/yum.repos.d/centos-stream.repo
+
 # Static manifests — baked in at image build time; entrypoint copies to /assets at run time.
 # Files that reference the AAP namespace use ${AAP_NAMESPACE} as a placeholder; the entrypoint
 # substitutes it before copying. Fully static files are copied unchanged.
