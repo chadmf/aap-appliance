@@ -1,6 +1,47 @@
 #!/bin/bash
 set -euo pipefail
 
+usage() {
+    cat <<'EOF'
+Usage: launch-appliance.sh [OPTIONS]
+
+Create and start a libvirt VM for the initial appliance installation.
+Copies the appliance ISO (or raw disk) and the agentconfig ISO into
+/var/lib/libvirt/images/ then launches virt-install.
+
+Options:
+  --output-dir, -o <dir>  Directory containing appliance.iso / appliance.raw
+                          and cluster-config/agentconfig.noarch.iso
+                            default: . (current directory)
+  --mac <mac>             VM NIC MAC address (must match RENDEZVOUS_IP reservation)
+                            default: 52:54:00:aa:bb:01
+  --rendezvous-ip <ip>    IP address printed in the post-install message
+                            default: 192.168.122.100
+  --memory <mb>           VM memory in MB
+                            default: 32768
+  --vcpus <n>             Number of virtual CPUs
+                            default: 8
+  --format <fmt>          Appliance image format: live-iso or raw
+                            default: live-iso
+  --vm-name <name>        libvirt domain name
+                            default: aap-appliance
+  --network <name>        libvirt network to attach to
+                            default: default
+  --replace               Destroy and recreate VM if it already exists
+  --help, -h              Show this help and exit
+
+Environment variables (override option defaults):
+  OUTPUT_DIR          Same as --output-dir
+  VM_MAC              Same as --mac
+  RENDEZVOUS_IP       Same as --rendezvous-ip
+  VM_MEMORY           Same as --memory
+  VM_VCPUS            Same as --vcpus
+  APPLIANCE_FORMAT    Same as --format
+  VM_NAME             Same as --vm-name
+  LIBVIRT_NETWORK     Same as --network
+EOF
+}
+
 OUTPUT_DIR="${OUTPUT_DIR:-.}"
 VM_MAC="${VM_MAC:-52:54:00:aa:bb:01}"
 RENDEZVOUS_IP="${RENDEZVOUS_IP:-192.168.122.100}"
@@ -22,6 +63,7 @@ while [[ $# -gt 0 ]]; do
         --vm-name)        VM_NAME="$2";           shift 2 ;;
         --network)        LIBVIRT_NETWORK="$2";   shift 2 ;;
         --replace)        REPLACE=true;           shift ;;
+        --help|-h)        usage; exit 0 ;;
         *) echo "error: unknown argument: $1" >&2; exit 1 ;;
     esac
 done
@@ -46,6 +88,7 @@ if [[ "$APPLIANCE_FORMAT" = "live-iso" ]]; then
 else
     sudo cp "$OUTPUT_DIR/appliance.raw" "$IMAGES_DIR/${VM_NAME}.raw"
 fi
+
 sudo cp "$OUTPUT_DIR/cluster-config/agentconfig.noarch.iso" "$IMAGES_DIR/agentconfig.noarch.iso"
 
 if [[ "$APPLIANCE_FORMAT" = "live-iso" ]]; then

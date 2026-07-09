@@ -96,7 +96,7 @@ def base_entrypoint_env(static_dir, assets_dir, pull_secret_file, ssh_key_file, 
         'MACHINE_NETWORK': '192.168.122.0/24',
         'DISK_SIZE_GB': '200',
         'APPLIANCE_FORMAT': 'live-iso',
-        'APPLIANCE_CONTENT': 'aap',
+        'APPLIANCE_CONTENT': 'aap-full',
         'AAP_NAMESPACE': 'aap',
         'AAP_PRERELEASE': 'false',
         'AO_NAMESPACE': 'automation-orchestrator',
@@ -106,50 +106,88 @@ def base_entrypoint_env(static_dir, assets_dir, pull_secret_file, ssh_key_file, 
     }
 
 
-def run_entrypoint(env):
-    return subprocess.run(
-        ['bash', str(ENTRYPOINT)],
-        env=env,
-        capture_output=True,
-        text=True,
-    )
+def run_entrypoint(env, subcommand=None):
+    cmd = ['bash', str(ENTRYPOINT)]
+    if subcommand:
+        cmd.append(subcommand)
+    return subprocess.run(cmd, env=env, capture_output=True, text=True)
 
 
-class TestSkipApplianceBuild:
-    def test_default_runs_build(self, base_entrypoint_env, mock_bin_dir):
-        env = {k: v for k, v in base_entrypoint_env.items() if k != 'SKIP_APPLIANCE_BUILD'}
-        result = run_entrypoint(env)
+class TestBuildAppliance:
+    def test_runs_appliance_build(self, base_entrypoint_env, mock_bin_dir):
+        result = run_entrypoint(base_entrypoint_env, 'build-appliance')
         assert result.returncode == 0, result.stderr
         assert (mock_bin_dir / 'openshift-appliance.called').exists()
 
-    def test_false_runs_build(self, base_entrypoint_env, mock_bin_dir):
-        env = {**base_entrypoint_env, 'SKIP_APPLIANCE_BUILD': 'false'}
-        result = run_entrypoint(env)
+    def test_does_not_run_openshift_install(self, base_entrypoint_env, mock_bin_dir, assets_dir):
+        result = run_entrypoint(base_entrypoint_env, 'build-appliance')
         assert result.returncode == 0, result.stderr
-        assert (mock_bin_dir / 'openshift-appliance.called').exists()
+        assert not (assets_dir / 'cluster-config' / 'agentconfig.noarch.iso').exists()
 
-    def test_true_skips_build(self, base_entrypoint_env, mock_bin_dir):
-        env = {**base_entrypoint_env, 'SKIP_APPLIANCE_BUILD': 'true'}
-        result = run_entrypoint(env)
+    def test_does_not_require_base_domain(self, base_entrypoint_env, mock_bin_dir):
+        env = {k: v for k, v in base_entrypoint_env.items() if k != 'BASE_DOMAIN'}
+        result = run_entrypoint(env, 'build-appliance')
         assert result.returncode == 0, result.stderr
-        assert not (mock_bin_dir / 'openshift-appliance.called').exists()
 
-    def test_true_still_generates_agentconfig(self, base_entrypoint_env, assets_dir):
-        env = {**base_entrypoint_env, 'SKIP_APPLIANCE_BUILD': 'true'}
-        result = run_entrypoint(env)
+    def test_does_not_require_rendezvous_ip(self, base_entrypoint_env, mock_bin_dir):
+        env = {k: v for k, v in base_entrypoint_env.items() if k != 'RENDEZVOUS_IP'}
+        result = run_entrypoint(env, 'build-appliance')
+        assert result.returncode == 0, result.stderr
+
+    def test_writes_appliance_config(self, base_entrypoint_env, assets_dir):
+        result = run_entrypoint(base_entrypoint_env, 'build-appliance')
+        assert result.returncode == 0, result.stderr
+        assert (assets_dir / 'appliance-config.yaml').exists()
+
+    def test_no_operator_manifests_in_openshift_dir(self, base_entrypoint_env, assets_dir):
+        result = run_entrypoint(base_entrypoint_env, 'build-appliance')
+        assert result.returncode == 0, result.stderr
+        assert not (assets_dir / 'openshift' / 'aap.yaml').exists()
+        assert not (assets_dir / 'openshift' / 'ao.yaml').exists()
+
+    def test_fails_without_pull_secret(self, base_entrypoint_env):
+        env = {**base_entrypoint_env, 'PULL_SECRET_FILE': '/nonexistent/pull-secret'}
+        result = run_entrypoint(env, 'build-appliance')
+        assert result.returncode != 0
+        assert 'pull secret' in result.stderr
+
+
+class TestBuildAgentconfig:
+    def test_runs_openshift_install(self, base_entrypoint_env, assets_dir):
+        result = run_entrypoint(base_entrypoint_env, 'build-agentconfig')
         assert result.returncode == 0, result.stderr
         assert (assets_dir / 'cluster-config' / 'agentconfig.noarch.iso').exists()
 
-    def test_true_fails_if_no_binary(self, base_entrypoint_env):
+    def test_does_not_run_appliance_build(self, base_entrypoint_env, mock_bin_dir):
+        result = run_entrypoint(base_entrypoint_env, 'build-agentconfig')
+        assert result.returncode == 0, result.stderr
+        assert not (mock_bin_dir / 'openshift-appliance.called').exists()
+
+    def test_requires_base_domain(self, base_entrypoint_env):
+        env = {k: v for k, v in base_entrypoint_env.items() if k != 'BASE_DOMAIN'}
+        result = run_entrypoint(env, 'build-agentconfig')
+        assert result.returncode != 0
+        assert 'BASE_DOMAIN' in result.stderr
+
+    def test_requires_rendezvous_ip(self, base_entrypoint_env):
+        env = {k: v for k, v in base_entrypoint_env.items() if k != 'RENDEZVOUS_IP'}
+        result = run_entrypoint(env, 'build-agentconfig')
+        assert result.returncode != 0
+        assert 'RENDEZVOUS_IP' in result.stderr
+
+    def test_operator_manifests_in_cluster_config(self, base_entrypoint_env, assets_dir):
+        result = run_entrypoint(base_entrypoint_env, 'build-agentconfig')
+        assert result.returncode == 0, result.stderr
+        assert (assets_dir / 'cluster-config' / 'openshift' / 'aap.yaml').exists()
+        assert (assets_dir / 'cluster-config' / 'openshift' / 'post-install-crs-job.yaml').exists()
+
+    def test_fails_if_no_binary(self, base_entrypoint_env):
         env = {k: v for k, v in base_entrypoint_env.items() if k != 'OPENSHIFT_INSTALL_BIN'}
-        env['SKIP_APPLIANCE_BUILD'] = 'true'
-        # No cache binary pre-created → should fail with a helpful message
-        result = run_entrypoint(env)
+        result = run_entrypoint(env, 'build-agentconfig')
         assert result.returncode != 0
         assert 'openshift-install not found' in result.stderr
 
     def test_explicit_bin_override_is_used(self, base_entrypoint_env, tmp_path, assets_dir):
-        # Place a separate mock binary outside mock_bin_dir to confirm the override is used
         alt_bin = tmp_path / 'alt-openshift-install'
         marker = tmp_path / 'alt.called'
         _write_script(
@@ -160,19 +198,13 @@ class TestSkipApplianceBuild:
             '  touch "$dir/agentconfig.noarch.iso"\n'
             'fi',
         )
-        env = {
-            **base_entrypoint_env,
-            'SKIP_APPLIANCE_BUILD': 'true',
-            'OPENSHIFT_INSTALL_BIN': str(alt_bin),
-        }
-        result = run_entrypoint(env)
+        env = {**base_entrypoint_env, 'OPENSHIFT_INSTALL_BIN': str(alt_bin)}
+        result = run_entrypoint(env, 'build-agentconfig')
         assert result.returncode == 0, result.stderr
         assert marker.exists(), 'expected OPENSHIFT_INSTALL_BIN override to be invoked'
 
     def test_cache_path_used_when_no_override(self, base_entrypoint_env, assets_dir, mock_bin_dir):
-        # Remove the explicit override; pre-seed the cache path so the autodetect finds it
         env = {k: v for k, v in base_entrypoint_env.items() if k != 'OPENSHIFT_INSTALL_BIN'}
-        env['SKIP_APPLIANCE_BUILD'] = 'true'
 
         cache_binary = assets_dir / CACHE_INSTALL_REL
         cache_binary.parent.mkdir(parents=True, exist_ok=True)
@@ -186,6 +218,32 @@ class TestSkipApplianceBuild:
             'fi',
         )
 
-        result = run_entrypoint(env)
+        result = run_entrypoint(env, 'build-agentconfig')
         assert result.returncode == 0, result.stderr
         assert marker.exists(), 'expected cache-path binary to be invoked'
+
+
+class TestOneShotMode:
+    def test_runs_both_phases(self, base_entrypoint_env, mock_bin_dir, assets_dir):
+        result = run_entrypoint(base_entrypoint_env)
+        assert result.returncode == 0, result.stderr
+        assert (mock_bin_dir / 'openshift-appliance.called').exists()
+        assert (assets_dir / 'cluster-config' / 'agentconfig.noarch.iso').exists()
+
+    def test_requires_base_domain(self, base_entrypoint_env):
+        env = {k: v for k, v in base_entrypoint_env.items() if k != 'BASE_DOMAIN'}
+        result = run_entrypoint(env)
+        assert result.returncode != 0
+
+    def test_requires_rendezvous_ip(self, base_entrypoint_env):
+        env = {k: v for k, v in base_entrypoint_env.items() if k != 'RENDEZVOUS_IP'}
+        result = run_entrypoint(env)
+        assert result.returncode != 0
+
+
+
+class TestUnknownSubcommand:
+    def test_unknown_subcommand_fails(self, base_entrypoint_env):
+        result = run_entrypoint(base_entrypoint_env, 'invalid-subcommand')
+        assert result.returncode != 0
+        assert 'unknown subcommand' in result.stderr

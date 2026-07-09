@@ -22,9 +22,38 @@ set -euo pipefail
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 AUTHFILE=""
 
+usage() {
+    cat <<'EOF'
+Usage: update-ao-images.sh --authfile <path> [--help]
+
+Re-pin all AO and CloudNativePG image digests and update CatalogSource
+digests in the operator manifest and ao-cr.yaml. Run this before each
+appliance rebuild to pick up the latest images.
+
+Always operates in pre-release mode (AO has no GA release yet).
+
+Sources pulled:
+  AO operator index:    quay.io/aap/ansible-automation-platform/automation-orchestrator-operator-index:main
+  CloudNativePG index:  quay.io/operatorhubio/catalog:latest  (community OperatorHub)
+  Postgres image:       ghcr.io/cloudnative-pg/postgresql:15
+
+Updates:
+  config/ao-images-prerelease.yaml
+  assets/openshift/ao-prerelease.yaml  (AO + CNPG CatalogSource digests, startingCSV)
+  assets/openshift/crs/ao-cr.yaml      (postgres imageName pin)
+
+Options:
+  --authfile <path>   Path to a pull secret / auth file for skopeo and opm   (required)
+  --help, -h          Show this help and exit
+
+Requirements: opm, skopeo, python3
+EOF
+}
+
 while [[ $# -gt 0 ]]; do
     case $1 in
         --authfile)  AUTHFILE="$2"; shift 2 ;;
+        --help|-h)   usage; exit 0 ;;
         *) echo "Unknown argument: $1" >&2; exit 1 ;;
     esac
 done

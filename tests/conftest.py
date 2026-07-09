@@ -43,7 +43,7 @@ def base_env(static_dir, assets_dir, pull_secret_file):
         'MACHINE_NETWORK': '192.168.122.0/24',
         'DISK_SIZE_GB': '200',
         'APPLIANCE_FORMAT': 'live-iso',
-        'APPLIANCE_CONTENT': 'aap',
+        'APPLIANCE_CONTENT': 'aap-full',
         'AAP_NAMESPACE': 'aap',
         'AAP_PRERELEASE': 'false',
         'AO_NAMESPACE': 'automation-orchestrator',

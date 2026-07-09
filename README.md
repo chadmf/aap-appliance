@@ -3,9 +3,10 @@
 Builds an OpenShift Single Node (SNO) appliance disk image with Red Hat automation products pre-baked. When the image is cloned to hardware or a VM and booted, it installs OCP and deploys the selected products fully offline — no internet access required at install time.
 
 Supported products (controlled by `APPLIANCE_CONTENT`):
-- **`aap`** (default) — Ansible Automation Platform 2.7
+- **`aap`** — Ansible Automation Platform 2.7
 - **`ao`** — Automation Orchestrator + CloudNativePG
-- **`aap-ao`** — both products together
+- **`aap-with-ao`** — both products together
+- **`aap-full`** (default) — all AAP product operators; currently equivalent to `aap-with-ao`, intended as a forward-compatible "give me everything" value
 
 The image is built on top of the [openshift-appliance](https://github.com/openshift/appliance) tool. This repo bakes in the static OCP and product manifests so the only inputs you need to provide at build time are your site-specific parameters.
 
@@ -28,8 +29,8 @@ The image is built on top of the [openshift-appliance](https://github.com/opensh
 
 The built image includes (depending on `APPLIANCE_CONTENT`):
 - OCP SNO
-- **AAP** (`aap`, `aap-ao`): AAP operator 2.7 installed via the certified-operators catalog
-- **AO** (`ao`, `aap-ao`): Automation Orchestrator operator (pre-release) + CloudNativePG operator
+- **AAP** (`aap`, `aap-with-ao`, `aap-full`): AAP operator 2.7 installed via the certified-operators catalog
+- **AO** (`ao`, `aap-with-ao`, `aap-full`): Automation Orchestrator operator (pre-release) + CloudNativePG operator
 - Rancher local-path-provisioner as the default StorageClass (hostPath-backed, supports RWX)
 - All required images pre-cached in the appliance local registry — no external pulls during install
 
@@ -62,7 +63,7 @@ The script:
 4. Writes the merged image list to `config/ao-images-prerelease.yaml`
 5. Updates the AO and `redhat-operator-index` CatalogSource digests, AO `startingCSV`, and channel names in `assets/openshift/ao-prerelease.yaml`
 
-For `APPLIANCE_CONTENT=aap-ao` builds, run **both** update scripts to keep all digests current. The `redhat-operator-index` digest appears in both `aap.yaml` and `ao-prerelease.yaml`; the scripts keep them in sync independently.
+For `APPLIANCE_CONTENT=aap-with-ao` or `aap-full` builds, run **both** update scripts to keep all digests current. The `redhat-operator-index` digest appears in both `aap.yaml` and `ao-prerelease.yaml`; the scripts keep them in sync independently.
 
 Review all changes with `git diff` before building.
 
@@ -116,7 +117,7 @@ The container generates config files and runs the appliance builder. The output 
 | `VM_MAC` | _(unset)_ | MAC address of the rendezvous NIC. Required when `GATEWAY` is set. Accepts colon-separated (`52:54:00:aa:bb:01`) or dash-separated (`08-00-27-61-6A-4A`) format. Use the same value as the `--mac` flag in `launch-appliance.sh`. `VM_MAC_0` takes precedence if both are set. |
 | `DNS_SERVER` | `8.8.8.8` | DNS nameserver for the rendezvous node. Only used when `GATEWAY` is set. |
 | `DISK_SIZE_GB` | `200` | Disk size in GB for the raw image (minimum 150; ignored for `live-iso`) |
-| `APPLIANCE_CONTENT` | `aap` | Products to include: `aap`, `ao`, or `aap-ao` |
+| `APPLIANCE_CONTENT` | `aap-full` | Operators to install: `aap`, `ao`, `aap-with-ao`, or `aap-full` (all AAP product operators) |
 | `AAP_NAMESPACE` | `aap` | Kubernetes namespace where AAP is deployed |
 | `AAP_PRERELEASE` | `false` | Set to `true` to use pre-release AAP from `quay.io/aap` instead of the released `registry.redhat.io` index |
 | `AO_NAMESPACE` | `automation-orchestrator` | Kubernetes namespace where Automation Orchestrator is deployed |
@@ -312,10 +313,10 @@ oc get aap -n aap -w
 The local-path-provisioner is already running as the default StorageClass. The appliance automatically applies operator CRs once the operator CRDs are registered.
 
 ```bash
-# AAP (APPLIANCE_CONTENT=aap or aap-ao)
+# AAP (APPLIANCE_CONTENT=aap, aap-with-ao, or aap-full)
 oc get aap -n aap -w
 
-# AO (APPLIANCE_CONTENT=ao or aap-ao)
+# AO (APPLIANCE_CONTENT=ao, aap-with-ao, or aap-full)
 oc get automationorchestrator -n automation-orchestrator -w
 oc get cluster -n automation-orchestrator -w   # CloudNativePG cluster
 ```

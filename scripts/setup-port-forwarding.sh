@@ -1,6 +1,22 @@
 #!/bin/bash
 set -euo pipefail
 
+if [[ "${1:-}" == "--help" || "${1:-}" == "-h" ]]; then
+    cat <<'EOF'
+Usage: setup-port-forwarding.sh [--help]
+
+Install a libvirt network hook that forwards host ports 80, 443, and 6443 to
+the appliance VM using nft DNAT rules. The hook fires automatically whenever
+the libvirt default network starts, so port forwarding survives host reboots.
+Also applies the rules immediately without waiting for a libvirt restart.
+
+Environment variables:
+  RENDEZVOUS_IP   IP address of the appliance VM to forward traffic to
+                    default: 192.168.122.100
+EOF
+    exit 0
+fi
+
 VM_IP="${RENDEZVOUS_IP:-192.168.122.100}"
 HOOK_DIR=/etc/libvirt/hooks
 

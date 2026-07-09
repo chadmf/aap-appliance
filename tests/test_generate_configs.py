@@ -7,32 +7,201 @@ import pytest
 SCRIPT = pathlib.Path(__file__).parent.parent / 'scripts' / 'generate-configs.py'
 
 
-def run(env):
+def run(env, build_mode=None):
+    e = dict(env)
+    if build_mode is not None:
+        e['BUILD_MODE'] = build_mode
     return subprocess.run(
         ['python3', str(SCRIPT)],
-        env=env,
+        env=e,
         capture_output=True,
         text=True,
     )
 
 
+# ── Phase 1 (appliance) ───────────────────────────────────────────────────────
+
+class TestAppliancePhase:
+    """Phase 1: appliance-config + infra manifests only — no operator manifests."""
+
+    @pytest.fixture(autouse=True)
+    def _env(self, base_env):
+        self.env = {**base_env, 'BUILD_MODE': 'appliance'}
+
+    def test_writes_appliance_config(self, assets_dir):
+        result = run(self.env)
+        assert result.returncode == 0, result.stderr
+        assert (assets_dir / 'appliance-config.yaml').exists()
+
+    def test_no_operator_manifests_in_openshift_dir(self, assets_dir):
+        result = run(self.env)
+        assert result.returncode == 0, result.stderr
+        assert not (assets_dir / 'openshift' / 'aap.yaml').exists()
+        assert not (assets_dir / 'openshift' / 'ao.yaml').exists()
+        assert not (assets_dir / 'openshift' / 'crs').exists()
+
+    def test_infra_manifests_present(self, assets_dir):
+        result = run(self.env)
+        assert result.returncode == 0, result.stderr
+        assert (assets_dir / 'openshift' / 'local-path-provisioner.yaml').exists()
+        assert (assets_dir / 'openshift' / 'idms-additional-images.yaml').exists()
+
+    def test_ao_idms_always_present(self, assets_dir):
+        # AO only has prerelease — IDMS is always included in the appliance
+        result = run(self.env)
+        assert result.returncode == 0, result.stderr
+        assert (assets_dir / 'openshift' / 'idms-ao-prerelease.yaml').exists()
+
+    def test_aap_idms_present_when_prerelease(self, assets_dir):
+        env = {**self.env, 'AAP_PRERELEASE': 'true'}
+        result = run(env)
+        assert result.returncode == 0, result.stderr
+        assert (assets_dir / 'openshift' / 'idms-aap-prerelease.yaml').exists()
+
+    def test_aap_idms_absent_when_released(self, assets_dir):
+        # Released AAP images come from registry.redhat.io directly — no quay.io IDMS needed
+        result = run(self.env)  # AAP_PRERELEASE=false by default in base_env
+        assert result.returncode == 0, result.stderr
+        assert not (assets_dir / 'openshift' / 'idms-aap-prerelease.yaml').exists()
+
+    def test_image_list_includes_both_products(self, assets_dir, static_dir):
+        result = run(self.env)
+        assert result.returncode == 0, result.stderr
+
+        aap_images = yaml.safe_load((static_dir / 'config' / 'aap-images.yaml').read_text()) or []
+        ao_images = yaml.safe_load((static_dir / 'config' / 'ao-images-prerelease.yaml').read_text()) or []
+        expected = {img['name'] for img in aap_images + ao_images}
+
+        cfg = yaml.safe_load((assets_dir / 'appliance-config.yaml').read_text())
+        actual = {img['name'] for img in cfg.get('additionalImages', [])}
+        assert expected.issubset(actual)
+
+    def test_image_list_no_duplicates(self, assets_dir):
+        result = run(self.env)
+        assert result.returncode == 0, result.stderr
+        cfg = yaml.safe_load((assets_dir / 'appliance-config.yaml').read_text())
+        names = [img['name'] for img in cfg.get('additionalImages', [])]
+        assert len(names) == len(set(names))
+
+    def test_does_not_require_base_domain(self, base_env, assets_dir):
+        env = {k: v for k, v in base_env.items() if k != 'BASE_DOMAIN'}
+        env['BUILD_MODE'] = 'appliance'
+        result = run(env)
+        assert result.returncode == 0, result.stderr
+
+    def test_does_not_require_rendezvous_ip(self, base_env, assets_dir):
+        env = {k: v for k, v in base_env.items() if k != 'RENDEZVOUS_IP'}
+        env['BUILD_MODE'] = 'appliance'
+        result = run(env)
+        assert result.returncode == 0, result.stderr
+
+    def test_does_not_write_cluster_configs(self, assets_dir):
+        result = run(self.env)
+        assert result.returncode == 0, result.stderr
+        assert not (assets_dir / 'cluster-config' / 'install-config.yaml').exists()
+        assert not (assets_dir / 'cluster-config' / 'agent-config.yaml').exists()
+
+
+# ── Phase 2 (agentconfig) ─────────────────────────────────────────────────────
+
+class TestAgentconfigPhase:
+    """Phase 2: cluster-identity configs + operator manifests only — no appliance-config."""
+
+    @pytest.fixture(autouse=True)
+    def _env(self, base_env):
+        self.env = {**base_env, 'BUILD_MODE': 'agentconfig'}
+
+    def test_writes_install_config(self, assets_dir):
+        result = run(self.env)
+        assert result.returncode == 0, result.stderr
+        assert (assets_dir / 'cluster-config' / 'install-config.yaml').exists()
+
+    def test_writes_agent_config(self, assets_dir):
+        result = run(self.env)
+        assert result.returncode == 0, result.stderr
+        assert (assets_dir / 'cluster-config' / 'agent-config.yaml').exists()
+
+    def test_does_not_write_appliance_config(self, assets_dir):
+        result = run(self.env)
+        assert result.returncode == 0, result.stderr
+        assert not (assets_dir / 'appliance-config.yaml').exists()
+
+    def _job_docs(self, assets_dir):
+        """Parse the post-install-crs-job.yaml into a list of YAML documents."""
+        job_yaml = (assets_dir / 'cluster-config' / 'openshift' / 'post-install-crs-job.yaml').read_text()
+        return [d for d in yaml.safe_load_all(job_yaml) if d]
+
+    def _job_configmap(self, assets_dir):
+        docs = self._job_docs(assets_dir)
+        return next(d for d in docs if d.get('kind') == 'ConfigMap')
+
+    def test_aap_manifests_in_cluster_config_openshift(self, assets_dir):
+        env = {**self.env, 'APPLIANCE_CONTENT': 'aap'}
+        result = run(env)
+        assert result.returncode == 0, result.stderr
+        assert (assets_dir / 'cluster-config' / 'openshift' / 'aap.yaml').exists()
+        assert not (assets_dir / 'cluster-config' / 'openshift' / 'ao.yaml').exists()
+        cm = self._job_configmap(assets_dir)
+        assert any(k.startswith('aap-cr-') for k in cm['data'])
+        assert not any(k.startswith('ao-cr-') for k in cm['data'])
+
+    def test_ao_manifests_in_cluster_config_openshift(self, assets_dir):
+        env = {**self.env, 'APPLIANCE_CONTENT': 'ao'}
+        result = run(env)
+        assert result.returncode == 0, result.stderr
+        assert (assets_dir / 'cluster-config' / 'openshift' / 'ao.yaml').exists()
+        assert not (assets_dir / 'cluster-config' / 'openshift' / 'aap.yaml').exists()
+        cm = self._job_configmap(assets_dir)
+        assert any(k.startswith('ao-cr-') for k in cm['data'])
+        assert not any(k.startswith('aap-cr-') for k in cm['data'])
+
+    def test_both_manifests_for_aap_with_ao(self, assets_dir):
+        env = {**self.env, 'APPLIANCE_CONTENT': 'aap-with-ao'}
+        result = run(env)
+        assert result.returncode == 0, result.stderr
+        assert (assets_dir / 'cluster-config' / 'openshift' / 'aap.yaml').exists()
+        assert (assets_dir / 'cluster-config' / 'openshift' / 'ao.yaml').exists()
+        cm = self._job_configmap(assets_dir)
+        assert any(k.startswith('aap-cr-') for k in cm['data'])
+        assert any(k.startswith('ao-cr-') for k in cm['data'])
+
+    def test_both_manifests_for_aap_full(self, assets_dir):
+        env = {**self.env, 'APPLIANCE_CONTENT': 'aap-full'}
+        result = run(env)
+        assert result.returncode == 0, result.stderr
+        assert (assets_dir / 'cluster-config' / 'openshift' / 'aap.yaml').exists()
+        assert (assets_dir / 'cluster-config' / 'openshift' / 'ao.yaml').exists()
+        cm = self._job_configmap(assets_dir)
+        assert any(k.startswith('aap-cr-') for k in cm['data'])
+        assert any(k.startswith('ao-cr-') for k in cm['data'])
+
+
 # ── AAP flow ──────────────────────────────────────────────────────────────────
 
 class TestAAPFlow:
+    def _job_configmap(self, assets_dir):
+        job_yaml = (assets_dir / 'cluster-config' / 'openshift' / 'post-install-crs-job.yaml').read_text()
+        docs = [d for d in yaml.safe_load_all(job_yaml) if d]
+        return next(d for d in docs if d.get('kind') == 'ConfigMap')
+
     def test_released_creates_correct_files(self, base_env, assets_dir):
-        result = run(base_env)
+        env = {**base_env, 'APPLIANCE_CONTENT': 'aap'}
+        result = run(env)
         assert result.returncode == 0, result.stderr
 
-        assert (assets_dir / 'openshift' / 'aap.yaml').exists()
-        assert (assets_dir / 'openshift' / 'crs' / 'aap-cr.yaml').exists()
-        assert not (assets_dir / 'openshift' / 'ao.yaml').exists()
+        assert (assets_dir / 'cluster-config' / 'openshift' / 'aap.yaml').exists()
+        assert not (assets_dir / 'cluster-config' / 'openshift' / 'ao.yaml').exists()
         assert not (assets_dir / 'openshift' / 'idms-aap-prerelease.yaml').exists()
+        cm = self._job_configmap(assets_dir)
+        assert any(k.startswith('aap-cr-') for k in cm['data'])
+        assert not any(k.startswith('ao-cr-') for k in cm['data'])
 
     def test_released_substitutes_namespace(self, base_env, assets_dir):
-        result = run(base_env)
+        env = {**base_env, 'APPLIANCE_CONTENT': 'aap'}
+        result = run(env)
         assert result.returncode == 0, result.stderr
 
-        aap_yaml = (assets_dir / 'openshift' / 'aap.yaml').read_text()
+        aap_yaml = (assets_dir / 'cluster-config' / 'openshift' / 'aap.yaml').read_text()
         assert 'name: aap' in aap_yaml
         assert '${AAP_NAMESPACE}' not in aap_yaml
 
@@ -41,7 +210,7 @@ class TestAAPFlow:
         assert result.returncode == 0, result.stderr
 
         # Released AAP uses the redhat-operator-index catalog source
-        aap_yaml = (assets_dir / 'openshift' / 'aap.yaml').read_text()
+        aap_yaml = (assets_dir / 'cluster-config' / 'openshift' / 'aap.yaml').read_text()
         released_src = (static_dir / 'openshift' / 'aap.yaml').read_text()
         assert 'redhat-operator-index' in aap_yaml
         # Content matches released template (with placeholder substituted)
@@ -52,22 +221,20 @@ class TestAAPFlow:
         result = run(env)
         assert result.returncode == 0, result.stderr
 
-        aap_yaml = (assets_dir / 'openshift' / 'aap.yaml').read_text()
+        aap_yaml = (assets_dir / 'cluster-config' / 'openshift' / 'aap.yaml').read_text()
         prerelease_src = (static_dir / 'openshift' / 'aap-prerelease.yaml').read_text()
         assert aap_yaml == prerelease_src.replace('${AAP_NAMESPACE}', 'aap')
 
-    def test_prerelease_copies_idms(self, base_env, assets_dir):
+    def test_prerelease_copies_aap_idms_to_openshift_dir(self, base_env, assets_dir):
         env = {**base_env, 'AAP_PRERELEASE': 'true'}
         result = run(env)
         assert result.returncode == 0, result.stderr
-
+        # IDMS goes into the appliance openshift/ dir, not cluster-config/
         assert (assets_dir / 'openshift' / 'idms-aap-prerelease.yaml').exists()
-        assert not (assets_dir / 'openshift' / 'idms-ao-prerelease.yaml').exists()
 
-    def test_released_does_not_copy_idms(self, base_env, assets_dir):
+    def test_released_does_not_copy_aap_idms(self, base_env, assets_dir):
         result = run(base_env)
         assert result.returncode == 0, result.stderr
-
         assert not (assets_dir / 'openshift' / 'idms-aap-prerelease.yaml').exists()
 
 
@@ -78,35 +245,56 @@ class TestAOFlow:
     def _ao_env(self, base_env):
         self.env = {**base_env, 'APPLIANCE_CONTENT': 'ao', 'AO_PRERELEASE': 'true'}
 
+    def _job_configmap(self, assets_dir):
+        job_yaml = (assets_dir / 'cluster-config' / 'openshift' / 'post-install-crs-job.yaml').read_text()
+        docs = [d for d in yaml.safe_load_all(job_yaml) if d]
+        return next(d for d in docs if d.get('kind') == 'ConfigMap')
+
+    def _ao_cr_docs(self, assets_dir):
+        """Return parsed AO CR YAML documents from the ConfigMap (individual keys combined)."""
+        cm = self._job_configmap(assets_dir)
+        docs = []
+        for k in sorted(cm['data']):
+            if k.startswith('ao-cr-'):
+                doc = yaml.safe_load(cm['data'][k])
+                if doc:
+                    docs.append(doc)
+        return docs
+
+    def _ao_cr_combined(self, assets_dir):
+        """Return AO CR content as a single string for substring checks."""
+        cm = self._job_configmap(assets_dir)
+        return ''.join(cm['data'][k] for k in sorted(cm['data']) if k.startswith('ao-cr-'))
+
     def test_creates_correct_files(self, assets_dir):
         result = run(self.env)
         assert result.returncode == 0, result.stderr
 
-        assert (assets_dir / 'openshift' / 'ao.yaml').exists()
-        assert (assets_dir / 'openshift' / 'crs' / 'ao-cr.yaml').exists()
+        assert (assets_dir / 'cluster-config' / 'openshift' / 'ao.yaml').exists()
         assert (assets_dir / 'openshift' / 'idms-ao-prerelease.yaml').exists()
-        assert not (assets_dir / 'openshift' / 'aap.yaml').exists()
+        assert not (assets_dir / 'cluster-config' / 'openshift' / 'aap.yaml').exists()
+        cm = self._job_configmap(assets_dir)
+        assert any(k.startswith('ao-cr-') for k in cm['data'])
+        assert not any(k.startswith('aap-cr-') for k in cm['data'])
 
     def test_substitutes_namespace_in_cr(self, assets_dir):
         result = run(self.env)
         assert result.returncode == 0, result.stderr
 
-        ao_cr = (assets_dir / 'openshift' / 'crs' / 'ao-cr.yaml').read_text()
-        assert '${AO_NAMESPACE}' not in ao_cr
-        assert 'automation-orchestrator' in ao_cr
+        combined = self._ao_cr_combined(assets_dir)
+        assert '${AO_NAMESPACE}' not in combined
+        assert 'automation-orchestrator' in combined
 
     def test_substitutes_db_password_in_cr(self, assets_dir):
         result = run(self.env)
         assert result.returncode == 0, result.stderr
 
-        ao_cr = (assets_dir / 'openshift' / 'crs' / 'ao-cr.yaml').read_text()
-        assert '${AO_DB_PASSWORD}' not in ao_cr
-        # Password must be a non-empty string (secrets.token_urlsafe(24))
-        parsed = list(yaml.safe_load_all(ao_cr))
+        combined = self._ao_cr_combined(assets_dir)
+        assert '${AO_DB_PASSWORD}' not in combined
         passwords = [
             doc['stringData']['password']
-            for doc in parsed
-            if doc and doc.get('kind') == 'Secret' and 'stringData' in doc
+            for doc in self._ao_cr_docs(assets_dir)
+            if doc.get('kind') == 'Secret' and 'stringData' in doc
         ]
         assert all(p and len(p) > 0 for p in passwords)
 
@@ -114,7 +302,7 @@ class TestAOFlow:
         result = run(self.env)
         assert result.returncode == 0, result.stderr
 
-        ao_yaml = (assets_dir / 'openshift' / 'ao.yaml').read_text()
+        ao_yaml = (assets_dir / 'cluster-config' / 'openshift' / 'ao.yaml').read_text()
         assert '${AO_NAMESPACE}' not in ao_yaml
         assert 'automation-orchestrator' in ao_yaml
 
@@ -124,16 +312,22 @@ class TestAOFlow:
 class TestAAPWithAOFlow:
     @pytest.fixture(autouse=True)
     def _combined_env(self, base_env):
-        self.env = {**base_env, 'APPLIANCE_CONTENT': 'aap-ao', 'AO_PRERELEASE': 'true'}
+        self.env = {**base_env, 'APPLIANCE_CONTENT': 'aap-with-ao', 'AO_PRERELEASE': 'true'}
+
+    def _job_configmap(self, assets_dir):
+        job_yaml = (assets_dir / 'cluster-config' / 'openshift' / 'post-install-crs-job.yaml').read_text()
+        docs = [d for d in yaml.safe_load_all(job_yaml) if d]
+        return next(d for d in docs if d.get('kind') == 'ConfigMap')
 
     def test_creates_both_manifests(self, assets_dir):
         result = run(self.env)
         assert result.returncode == 0, result.stderr
 
-        assert (assets_dir / 'openshift' / 'aap.yaml').exists()
-        assert (assets_dir / 'openshift' / 'ao.yaml').exists()
-        assert (assets_dir / 'openshift' / 'crs' / 'aap-cr.yaml').exists()
-        assert (assets_dir / 'openshift' / 'crs' / 'ao-cr.yaml').exists()
+        assert (assets_dir / 'cluster-config' / 'openshift' / 'aap.yaml').exists()
+        assert (assets_dir / 'cluster-config' / 'openshift' / 'ao.yaml').exists()
+        cm = self._job_configmap(assets_dir)
+        assert any(k.startswith('aap-cr-') for k in cm['data'])
+        assert any(k.startswith('ao-cr-') for k in cm['data'])
 
     def test_image_list_has_no_duplicates(self, assets_dir):
         result = run(self.env)
@@ -224,12 +418,17 @@ class TestDisconnectedMode:
 # ── Custom namespaces ─────────────────────────────────────────────────────────
 
 class TestCustomNamespaces:
+    def _job_configmap(self, assets_dir):
+        job_yaml = (assets_dir / 'cluster-config' / 'openshift' / 'post-install-crs-job.yaml').read_text()
+        docs = [d for d in yaml.safe_load_all(job_yaml) if d]
+        return next(d for d in docs if d.get('kind') == 'ConfigMap')
+
     def test_custom_aap_namespace(self, base_env, assets_dir):
         env = {**base_env, 'AAP_NAMESPACE': 'my-aap'}
         result = run(env)
         assert result.returncode == 0, result.stderr
 
-        aap_yaml = (assets_dir / 'openshift' / 'aap.yaml').read_text()
+        aap_yaml = (assets_dir / 'cluster-config' / 'openshift' / 'aap.yaml').read_text()
         assert 'my-aap' in aap_yaml
         assert '${AAP_NAMESPACE}' not in aap_yaml
 
@@ -238,9 +437,10 @@ class TestCustomNamespaces:
         result = run(env)
         assert result.returncode == 0, result.stderr
 
-        ao_cr = (assets_dir / 'openshift' / 'crs' / 'ao-cr.yaml').read_text()
-        assert 'my-ao' in ao_cr
-        assert '${AO_NAMESPACE}' not in ao_cr
+        cm = self._job_configmap(assets_dir)
+        combined = ''.join(cm['data'][k] for k in sorted(cm['data']) if k.startswith('ao-cr-'))
+        assert 'my-ao' in combined
+        assert '${AO_NAMESPACE}' not in combined
 
     def test_install_config_substitutes_base_domain(self, base_env, assets_dir):
         env = {**base_env, 'BASE_DOMAIN': 'my.cluster.io'}
@@ -380,3 +580,9 @@ class TestErrorCases:
         result = run(env)
         assert result.returncode != 0
         assert 'CPU_ARCHITECTURE' in result.stderr
+
+    def test_invalid_build_mode(self, base_env):
+        env = {**base_env, 'BUILD_MODE': 'invalid'}
+        result = run(env)
+        assert result.returncode != 0
+        assert 'BUILD_MODE' in result.stderr

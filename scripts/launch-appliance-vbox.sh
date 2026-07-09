@@ -1,6 +1,50 @@
 #!/bin/bash
 set -euo pipefail
 
+usage() {
+    cat <<'EOF'
+Usage: launch-appliance-vbox.sh [OPTIONS]
+
+Create and start a VirtualBox VM for the initial appliance installation.
+Configures a host-only adapter (vboxnet0) for static networking, creates a
+virtual disk, attaches the appliance ISO and agentconfig ISO, then starts the
+VM headless. Only live-iso format is supported (not raw).
+
+Options:
+  --output-dir, -o <dir>  Directory containing appliance.iso and
+                          cluster-config/agentconfig.noarch.iso
+                            default: . (current directory)
+  --mac <mac>             VM NIC MAC address (must match RENDEZVOUS_IP used at build time)
+                            default: 52:54:00:aa:bb:01
+  --rendezvous-ip <ip>    IP address of the rendezvous node (printed in post-install message)
+                            default: 192.168.56.100
+  --memory <mb>           VM memory in MB
+                            default: 32768
+  --vcpus <n>             Number of virtual CPUs
+                            default: 8
+  --disk-size <gb>        Virtual disk size in GB
+                            default: 200
+  --vm-name <name>        VirtualBox VM name
+                            default: aap-appliance
+  --replace               Power off and delete VM if it already exists
+  --help, -h              Show this help and exit
+
+Environment variables (override option defaults):
+  OUTPUT_DIR          Same as --output-dir
+  VM_MAC              Same as --mac
+  RENDEZVOUS_IP       Same as --rendezvous-ip
+  VM_MEMORY           Same as --memory
+  VM_VCPUS            Same as --vcpus
+  DISK_SIZE_GB        Same as --disk-size
+  APPLIANCE_FORMAT    live-iso only; raw is not supported on VirtualBox
+  VM_NAME             Same as --vm-name
+  HOSTONLY_IP         Host-only adapter IP on the host side
+                        default: 192.168.56.1
+  HOSTONLY_NETMASK    Host-only adapter netmask
+                        default: 255.255.255.0
+EOF
+}
+
 OUTPUT_DIR="${OUTPUT_DIR:-.}"
 VM_MAC="${VM_MAC:-52:54:00:aa:bb:01}"
 RENDEZVOUS_IP="${RENDEZVOUS_IP:-192.168.56.100}"
@@ -23,6 +67,7 @@ while [[ $# -gt 0 ]]; do
         --disk-size)      DISK_SIZE_GB="$2";     shift 2 ;;
         --vm-name)        VM_NAME="$2";          shift 2 ;;
         --replace)        REPLACE=true;          shift ;;
+        --help|-h)        usage; exit 0 ;;
         *) echo "error: unknown argument: $1" >&2; exit 1 ;;
     esac
 done
@@ -85,6 +130,7 @@ else
     echo "error: APPLIANCE_FORMAT=raw is not supported for VirtualBox; use live-iso" >&2
     exit 1
 fi
+
 VBoxManage storageattach "$VM_NAME" \
     --storagectl "IDE" --port 1 --device 0 \
     --type dvddrive \

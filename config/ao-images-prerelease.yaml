@@ -6,13 +6,13 @@
 - name: ghcr.io/cloudnative-pg/postgresql@sha256:1c97e0d6e94d8b335be7f258eeda2202966df5fde0c934eef4b13c760ec6a891
 - name: ghcr.io/cloudnative-pg/postgresql@sha256:ee2e3ce7f0ea935c3f4ab245c0b3959c9f1c49816ae02222ceb6bc347f48e43b
 - name: mirror.gcr.io/openpolicyagent/opa:1.4.2-static@sha256:3c995dc8a59f6ddfd92eb7404d2f7ff9fe71cd025d9251199957a8a6afbfd76e
-- name: quay.io/aap/ansible-automation-platform/automation-orchestrator-backend-rhel9@sha256:94c3ce5a2635ed6ca1032c86461c6548dcf5b36b6bdc0fb38dcb53c1b58fc3a0
-- name: quay.io/aap/ansible-automation-platform/automation-orchestrator-operator-bundle@sha256:9d7eb7aaac5bb0dcdede774f084ac4fac0c51f8f4409e021e391ccf612c6fb42
-- name: quay.io/aap/ansible-automation-platform/automation-orchestrator-operator-index@sha256:83bef141b02484c31b63ea3ad84134cf0cf6c6235f2b875004d508175bc0486f
-- name: quay.io/aap/ansible-automation-platform/automation-orchestrator-rhel9-operator@sha256:285f76531f5015e5c85bc8e6fdb01a3e64286c6c4983c4fc058e24037f6bc57a
+- name: quay.io/aap/ansible-automation-platform/automation-orchestrator-backend-rhel9@sha256:951fe29814336b6e8331e153454ad1fdd4a8f2638af85fc6fadf4081f1ee16cd
+- name: quay.io/aap/ansible-automation-platform/automation-orchestrator-operator-bundle@sha256:f97011b356ddebed286d32cea9c7840182feb443372538317b85519306cef4e4
+- name: quay.io/aap/ansible-automation-platform/automation-orchestrator-operator-index@sha256:42cdbdbda48aa6bc62538e619e1ab053f4a99c086349a7da950f566a6910ce55
+- name: quay.io/aap/ansible-automation-platform/automation-orchestrator-rhel9-operator@sha256:b5572f9d9719dd665f9066d79a6dd072faa4c14d1a408a12e7178e63df26e11e
 - name: quay.io/aap/ansible-automation-platform/automation-orchestrator-temporal-rhel9@sha256:61dd8a354fc860411a9b135a3c3f3cedb648e5f4ed8c303870ef5693c0c4c63f
-- name: quay.io/aap/ansible-automation-platform/automation-orchestrator-ui-rhel9@sha256:435b64f5004b5badfc4171b14bccbb53fb376429c74005e69e1cdc3ec5f4f825
-- name: quay.io/operatorhubio/catalog@sha256:a63653c1ece0017db24b4a044905845c306e06130ba5199cd6e56909c5e5479a
+- name: quay.io/aap/ansible-automation-platform/automation-orchestrator-ui-rhel9@sha256:a12f37b9c2f04236469c6bb5e02559a563e50cf80eb8a323f9b97f9b43ba9a81
+- name: quay.io/operatorhubio/catalog@sha256:77ce09daeb5283682e1ca0b26dfe207ea16457097eee66966169da88e2035410
 - name: quay.io/operatorhubio/cloudnative-pg@sha256:152c6ff3b86f84dea1f2d8cd15a36a912867c93a2a48a5b5872932e151578ade
 - name: registry.redhat.io/rhel9/redis-6@sha256:4e220dbc3218fa19513de06b94f6bb16c2d6a52aa9d002393d11d6976ce81a94
 # END AO IMAGES

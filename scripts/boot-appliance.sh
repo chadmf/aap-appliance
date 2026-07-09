@@ -1,6 +1,39 @@
 #!/bin/bash
 set -euo pipefail
 
+usage() {
+    cat <<'EOF'
+Usage: boot-appliance.sh --qcow2 <path> [OPTIONS]
+
+Import a raw QCOW2 appliance disk image into libvirt and start a VM from it.
+Use this after a full appliance installation to re-boot the finished VM, not
+for the initial install (use launch-appliance.sh for that).
+
+Options:
+  --qcow2, -q <path>   Path to the appliance QCOW2 image      (required)
+  --mac <mac>          VM NIC MAC address
+                         default: 52:54:00:aa:bb:01
+  --memory <mb>        VM memory in MB
+                         default: 32768
+  --vcpus <n>          Number of virtual CPUs
+                         default: 8
+  --vm-name <name>     libvirt domain name
+                         default: aap-appliance
+  --network <name>     libvirt network to attach to
+                         default: default
+  --replace            Destroy and recreate VM if it already exists
+  --help, -h           Show this help and exit
+
+Environment variables (override option defaults):
+  QCOW2_PATH           Same as --qcow2
+  VM_MAC               Same as --mac
+  VM_MEMORY            Same as --memory
+  VM_VCPUS             Same as --vcpus
+  VM_NAME              Same as --vm-name
+  LIBVIRT_NETWORK      Same as --network
+EOF
+}
+
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 QCOW2_PATH="${QCOW2_PATH:-}"
 VM_MAC="${VM_MAC:-52:54:00:aa:bb:01}"
@@ -19,6 +52,7 @@ while [[ $# -gt 0 ]]; do
         --vm-name)     VM_NAME="$2";           shift 2 ;;
         --network)     LIBVIRT_NETWORK="$2";   shift 2 ;;
         --replace)     REPLACE=true;           shift ;;
+        --help|-h)     usage; exit 0 ;;
         *) echo "error: unknown argument: $1" >&2; exit 1 ;;
     esac
 done

@@ -19,10 +19,35 @@ REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 AUTHFILE=""
 PRERELEASE=false
 
+usage() {
+    cat <<'EOF'
+Usage: update-aap-images.sh --authfile <path> [--prerelease] [--help]
+
+Re-pin all AAP image digests and update the CatalogSource digest in the
+operator manifest. Run this before each appliance rebuild to pick up the
+latest images.
+
+Modes:
+  (default)     Released AAP — pulls from registry.redhat.io/redhat/redhat-operator-index:v4.22
+                Updates: config/aap-images.yaml, assets/openshift/aap.yaml
+
+  --prerelease  Pre-release AAP — pulls from quay.io/aap/ansible-automation-platform/operator-index:2.7-next
+                Updates: config/aap-images-prerelease.yaml, assets/openshift/aap-prerelease.yaml
+
+Options:
+  --authfile <path>   Path to a pull secret / auth file for skopeo and opm   (required)
+  --prerelease        Update the pre-release image list and manifest instead
+  --help, -h          Show this help and exit
+
+Requirements: opm, skopeo, python3
+EOF
+}
+
 while [[ $# -gt 0 ]]; do
     case $1 in
-        --authfile)  AUTHFILE="$2"; shift 2 ;;
+        --authfile)   AUTHFILE="$2"; shift 2 ;;
         --prerelease) PRERELEASE=true; shift ;;
+        --help|-h)    usage; exit 0 ;;
         *) echo "Unknown argument: $1" >&2; exit 1 ;;
     esac
 done

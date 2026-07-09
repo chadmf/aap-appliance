@@ -1,17 +1,45 @@
 #!/bin/bash
 set -euo pipefail
 
-# Imports a pre-built appliance OVA (exported from a fully installed VirtualBox VM).
-#
-# After installation OVN-K migrates the static IP to the br-ex bridge via a MAC-
-# independent NM connection, so the physical NIC MAC does not affect cluster operation.
-#
-# The host-only NIC binding is not reliably preserved in the OVF export (VirtualBox
-# omits the adapter name from the manifest); --nic1/--hostonlyadapter1 is applied
-# after import to ensure the VM is always on vboxnet0.
-#
-# Defaults match the standard build parameters. Override if the appliance was built
-# with different values (GATEWAY, MACHINE_NETWORK, RENDEZVOUS_IP).
+usage() {
+    cat <<'EOF'
+Usage: import-appliance-vbox.sh [OPTIONS]
+
+Import a pre-built appliance OVA into VirtualBox and start it headless.
+Use this to re-deploy a fully installed appliance VM on a new host without
+going through the install process again.
+
+After installation, OVN-K migrates the static IP to the br-ex bridge via a
+MAC-independent NetworkManager connection, so the NIC MAC in the OVA does not
+affect cluster operation. The host-only NIC binding (vboxnet0) is re-applied
+after import because VirtualBox omits the adapter name from the OVF manifest.
+
+Defaults match the standard build parameters. Override if the appliance was
+built with different values for GATEWAY, MACHINE_NETWORK, or RENDEZVOUS_IP.
+
+Options:
+  --ova <path>           Path to the OVA file to import
+                           default: appliance.ova
+  --vm-name <name>       VirtualBox VM name
+                           default: aap-appliance
+  --rendezvous-ip <ip>   Node IP shown in post-start message; must match
+                         the RENDEZVOUS_IP used at build time
+                           default: 192.168.56.100
+  --hostonly-ip <ip>     Host-only adapter IP on the host side; must match
+                         GATEWAY used at build time
+                           default: 192.168.56.1
+  --replace              Power off and delete VM if it already exists
+  --help, -h             Show this help and exit
+
+Environment variables (override option defaults):
+  OVA                Same as --ova
+  VM_NAME            Same as --vm-name
+  RENDEZVOUS_IP      Same as --rendezvous-ip
+  HOSTONLY_IP        Same as --hostonly-ip
+  HOSTONLY_NETMASK   Host-only adapter netmask
+                       default: 255.255.255.0
+EOF
+}
 
 # Must match GATEWAY / MACHINE_NETWORK used at build time
 HOSTONLY_IP="${HOSTONLY_IP:-192.168.56.1}"
@@ -30,6 +58,7 @@ while [[ $# -gt 0 ]]; do
         --rendezvous-ip)  RENDEZVOUS_IP="$2";  shift 2 ;;
         --hostonly-ip)    HOSTONLY_IP="$2";    shift 2 ;;
         --replace)        REPLACE=true;        shift ;;
+        --help|-h)        usage; exit 0 ;;
         *) echo "error: unknown argument: $1" >&2; exit 1 ;;
     esac
 done
