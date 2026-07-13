@@ -1,0 +1,22 @@
+---
+apiVersion: config.openshift.io/v1
+kind: ImageDigestMirrorSet
+metadata:
+  name: idms-ao-prerelease
+spec:
+  imageDigestMirrors:
+  - source: quay.io/operatorhubio
+    mirrors:
+    - registry.appliance.openshift.com:22625/operatorhubio
+  - source: mirror.gcr.io/openpolicyagent
+    mirrors:
+    - registry.appliance.openshift.com:22625/openpolicyagent
+  - source: quay.io/aap/ansible-automation-platform
+    mirrors:
+    - registry.appliance.openshift.com:22625/aap/ansible-automation-platform
+  - source: registry.redhat.io/ansible-automation-platform
+    mirrors:
+    - registry.appliance.openshift.com:22625/aap/ansible-automation-platform
+  - source: ghcr.io/cloudnative-pg
+    mirrors:
+    - registry.appliance.openshift.com:22625/cloudnative-pg

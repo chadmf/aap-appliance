@@ -1,0 +1,38 @@
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: ${AAP_NAMESPACE}
+---
+apiVersion: operators.coreos.com/v1
+kind: OperatorGroup
+metadata:
+  name: ansible-automation-platform-operator
+  namespace: ${AAP_NAMESPACE}
+spec:
+  targetNamespaces:
+  - ${AAP_NAMESPACE}
+---
+apiVersion: operators.coreos.com/v1alpha1
+kind: CatalogSource
+metadata:
+  name: redhat-operator-index
+  namespace: openshift-marketplace
+spec:
+  sourceType: grpc
+  image: registry.appliance.openshift.com:22625/redhat/redhat-operator-index@sha256:4b67cc482eb354639230cf78c80b39e087bd082ec6bd791977fa865d6d150f55
+  displayName: Red Hat Operators
+  publisher: Red Hat
+---
+apiVersion: operators.coreos.com/v1alpha1
+kind: Subscription
+metadata:
+  name: ansible-automation-platform-operator
+  namespace: ${AAP_NAMESPACE}
+spec:
+  channel: stable-2.7
+  name: ansible-automation-platform-operator
+  installPlanApproval: Automatic
+  startingCSV: aap-operator.v2.7.0-0.1781768237
+  source: redhat-operator-index
+  sourceNamespace: openshift-marketplace

@@ -14,6 +14,11 @@ Options:
   --output-dir, -o <dir>  Directory containing appliance.iso and
                           cluster-config/agentconfig.noarch.iso
                             default: . (current directory)
+  --appliance-iso <path>  Explicit path to appliance.iso. Overrides --output-dir
+                          for this file.
+  --agentconfig-iso <path>
+                          Explicit path to agentconfig.noarch.iso. Overrides
+                          --output-dir for this file.
   --mac <mac>             VM NIC MAC address (must match RENDEZVOUS_IP used at build time)
                             default: 52:54:00:aa:bb:01
   --rendezvous-ip <ip>    IP address of the rendezvous node (printed in post-install message)
@@ -31,6 +36,8 @@ Options:
 
 Environment variables (override option defaults):
   OUTPUT_DIR          Same as --output-dir
+  APPLIANCE_ISO       Same as --appliance-iso
+  AGENTCONFIG_ISO     Same as --agentconfig-iso
   VM_MAC              Same as --mac
   RENDEZVOUS_IP       Same as --rendezvous-ip
   VM_MEMORY           Same as --memory
@@ -46,6 +53,8 @@ EOF
 }
 
 OUTPUT_DIR="${OUTPUT_DIR:-.}"
+APPLIANCE_ISO="${APPLIANCE_ISO:-}"
+AGENTCONFIG_ISO="${AGENTCONFIG_ISO:-}"
 VM_MAC="${VM_MAC:-52:54:00:aa:bb:01}"
 RENDEZVOUS_IP="${RENDEZVOUS_IP:-192.168.56.100}"
 VM_MEMORY="${VM_MEMORY:-32768}"
@@ -59,18 +68,28 @@ REPLACE=false
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
-        --output-dir|-o)  OUTPUT_DIR="$2";      shift 2 ;;
-        --mac)            VM_MAC="$2";           shift 2 ;;
-        --rendezvous-ip)  RENDEZVOUS_IP="$2";   shift 2 ;;
-        --memory)         VM_MEMORY="$2";        shift 2 ;;
-        --vcpus)          VM_VCPUS="$2";         shift 2 ;;
-        --disk-size)      DISK_SIZE_GB="$2";     shift 2 ;;
-        --vm-name)        VM_NAME="$2";          shift 2 ;;
-        --replace)        REPLACE=true;          shift ;;
-        --help|-h)        usage; exit 0 ;;
+        --output-dir|-o)    OUTPUT_DIR="$2";       shift 2 ;;
+        --appliance-iso)    APPLIANCE_ISO="$2";    shift 2 ;;
+        --agentconfig-iso)  AGENTCONFIG_ISO="$2";  shift 2 ;;
+        --mac)              VM_MAC="$2";            shift 2 ;;
+        --rendezvous-ip)    RENDEZVOUS_IP="$2";    shift 2 ;;
+        --memory)           VM_MEMORY="$2";         shift 2 ;;
+        --vcpus)            VM_VCPUS="$2";          shift 2 ;;
+        --disk-size)        DISK_SIZE_GB="$2";      shift 2 ;;
+        --vm-name)          VM_NAME="$2";           shift 2 ;;
+        --replace)          REPLACE=true;           shift ;;
+        --help|-h)          usage; exit 0 ;;
         *) echo "error: unknown argument: $1" >&2; exit 1 ;;
     esac
 done
+
+# Resolve ISO paths: explicit flags take precedence over --output-dir defaults
+if [[ -z "$APPLIANCE_ISO" ]]; then
+    APPLIANCE_ISO="$OUTPUT_DIR/appliance.iso"
+fi
+if [[ -z "$AGENTCONFIG_ISO" ]]; then
+    AGENTCONFIG_ISO="$OUTPUT_DIR/cluster-config/agentconfig.noarch.iso"
+fi
 
 # Normalize MAC to VirtualBox internal format (12 lowercase hex digits, no separators)
 VM_MAC_VBOX="$(echo "$VM_MAC" | tr -d ':-' | tr '[:upper:]' '[:lower:]')"
@@ -124,7 +143,7 @@ if [[ "$APPLIANCE_FORMAT" = "live-iso" ]]; then
     VBoxManage storageattach "$VM_NAME" \
         --storagectl "IDE" --port 0 --device 0 \
         --type dvddrive \
-        --medium "$(realpath "$OUTPUT_DIR/appliance.iso")"
+        --medium "$(realpath "$APPLIANCE_ISO")"
 else
     # raw: copy the disk image into a VDI and skip the appliance ISO slot
     echo "error: APPLIANCE_FORMAT=raw is not supported for VirtualBox; use live-iso" >&2
@@ -134,7 +153,7 @@ fi
 VBoxManage storageattach "$VM_NAME" \
     --storagectl "IDE" --port 1 --device 0 \
     --type dvddrive \
-    --medium "$(realpath "$OUTPUT_DIR/cluster-config/agentconfig.noarch.iso")"
+    --medium "$(realpath "$AGENTCONFIG_ISO")"
 
 echo "==> Starting VM (headless)..."
 VBoxManage startvm "$VM_NAME" --type headless

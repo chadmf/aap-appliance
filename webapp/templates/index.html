@@ -1,0 +1,434 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>AAP Appliance Generator</title>
+  <link rel="icon" type="image/svg+xml" href="/static/rh-logo.svg">
+  <link rel="stylesheet" href="https://unpkg.com/@patternfly/patternfly@5/patternfly.css" crossorigin="anonymous">
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body class="pf-v5-u-h-100">
+
+<!-- Masthead -->
+<header class="pf-v5-c-masthead" style="background:#151515; padding: 0 1.5rem;">
+  <div class="pf-v5-c-masthead__main" style="display:flex; align-items:center; justify-content:space-between; height:56px;">
+    <div class="aap-masthead-logo">
+      <img src="/static/rh-logo.svg" alt="Red Hat" height="36">
+      <div class="aap-masthead-divider"></div>
+      <span class="aap-masthead-app-name">AAP Appliance Generator</span>
+    </div>
+    {% if appliance_iso_url %}
+    <a href="{{ appliance_iso_url }}"
+       class="pf-v5-c-button pf-m-secondary pf-m-small"
+       style="color:white; border-color:rgba(255,255,255,0.4);"
+       download>
+      Download Appliance ISO
+    </a>
+    {% endif %}
+  </div>
+</header>
+
+<!-- Page body -->
+<main class="aap-page-main">
+
+  <!-- Intro card -->
+  <div class="pf-v5-c-card pf-m-flat" style="margin-bottom:1.5rem;">
+    <div class="pf-v5-c-card__body">
+      <p class="pf-v5-u-mb-sm">
+        Generate a site-specific <strong>agentconfig ISO</strong> for your AAP appliance node.
+        Fill in the network and cluster details below — the ISO will be created on the server
+        and downloaded automatically.
+      </p>
+      <p class="pf-v5-u-color-200 pf-v5-u-font-size-sm">
+        Boot your node with <strong>two CD-ROMs</strong> attached:
+        the appliance ISO (Phase 1) and the agentconfig ISO generated here (Phase 2).
+        {% if appliance_iso_url %}
+        <a href="{{ appliance_iso_url }}" download style="white-space:nowrap;">Download appliance ISO &darr;</a>
+        {% endif %}
+        {% if not iso_mode %}
+        <br><strong>Note:</strong> <code>openshift-install</code> was not found on this server —
+        ISO generation is unavailable. Contact your administrator.
+        {% endif %}
+      </p>
+    </div>
+  </div>
+
+  <!-- Error alert (hidden by default) -->
+  <div id="error-section" style="display:none; margin-bottom:1rem;">
+    <div class="pf-v5-c-alert pf-m-danger pf-m-inline" aria-label="Error">
+      <div class="pf-v5-c-alert__icon">
+        <i class="fas fa-exclamation-circle" aria-hidden="true"></i>
+      </div>
+      <p class="pf-v5-c-alert__title"><strong>Error</strong></p>
+      <div class="pf-v5-c-alert__description">
+        <p id="error-msg"></p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Result section (hidden until generation) -->
+  <div id="result-section" style="display:none; margin-bottom:1rem;">
+    <div class="pf-v5-c-alert pf-m-success pf-m-inline" aria-label="Success">
+      <div class="pf-v5-c-alert__icon">
+        <i class="fas fa-check-circle" aria-hidden="true"></i>
+      </div>
+      <p class="pf-v5-c-alert__title"><strong>agentconfig.noarch.iso generated</strong></p>
+      <div class="pf-v5-c-alert__description">
+        <p class="pf-v5-u-mb-sm pf-v5-u-font-size-sm pf-v5-u-color-200">
+          Attach the agentconfig ISO as a <strong>secondary CD-ROM</strong> when
+          booting the appliance (the appliance ISO is the primary boot drive).
+        </p>
+        <div style="display:flex; flex-wrap:wrap; gap:0.5rem; align-items:center;">
+          <a id="agentconfig-link" class="pf-v5-c-button pf-m-primary pf-m-small" href="#" download>Download agentconfig.noarch.iso</a>
+          <a id="kubeconfig-link" class="pf-v5-c-button pf-m-secondary pf-m-small" href="#" download style="display:none;">Download kubeconfig</a>
+          <a id="kubeadmin-link" class="pf-v5-c-button pf-m-secondary pf-m-small" href="#" download style="display:none;">Download kubeadmin-password</a>
+        </div>
+        <p id="auth-note" class="pf-v5-u-mt-xs pf-v5-u-font-size-sm pf-v5-u-color-200" style="display:none;">
+          Cluster credentials are temporary — download before generating a new ISO.
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Main form card -->
+  <div class="pf-v5-c-card">
+    <div class="pf-v5-c-card__header">
+      <div class="pf-v5-c-card__title">
+        <h2 class="pf-v5-c-title pf-m-xl">Cluster &amp; Network Configuration</h2>
+      </div>
+    </div>
+    <div class="pf-v5-c-card__body">
+      <form id="config-form" class="pf-v5-c-form pf-m-horizontal" novalidate>
+
+        <!-- ── Cluster Identity ─────────────────────────────────────── -->
+        <section class="pf-v5-c-form__section">
+          <div class="pf-v5-c-form__section-title">Cluster Identity</div>
+
+          <div class="pf-v5-c-form__group">
+            <div class="pf-v5-c-form__group-label">
+              <label class="pf-v5-c-form__label" for="base_domain">
+                <span class="pf-v5-c-form__label-text">Base domain</span>
+                <span class="pf-v5-c-form__label-required" aria-hidden="true">&#42;</span>
+              </label>
+            </div>
+            <div class="pf-v5-c-form__group-control">
+              <input class="pf-v5-c-form-control" type="text" id="base_domain" name="base_domain"
+                     placeholder="example.com" required>
+              <p class="pf-v5-c-form__helper-text pf-v5-u-font-size-sm">
+                The cluster API will be reachable at <code>api.&lt;cluster-name&gt;.&lt;base-domain&gt;</code>.
+              </p>
+            </div>
+          </div>
+
+          <div class="pf-v5-c-form__group">
+            <div class="pf-v5-c-form__group-label">
+              <label class="pf-v5-c-form__label" for="cluster_name">
+                <span class="pf-v5-c-form__label-text">Cluster name</span>
+              </label>
+            </div>
+            <div class="pf-v5-c-form__group-control">
+              <input class="pf-v5-c-form-control" type="text" id="cluster_name" name="cluster_name"
+                     value="appliance" placeholder="appliance">
+            </div>
+          </div>
+
+          <div class="pf-v5-c-form__group">
+            <div class="pf-v5-c-form__group-label">
+              <label class="pf-v5-c-form__label" for="rendezvous_ip">
+                <span class="pf-v5-c-form__label-text">Rendezvous IP</span>
+                <span class="pf-v5-c-form__label-required" aria-hidden="true">&#42;</span>
+              </label>
+            </div>
+            <div class="pf-v5-c-form__group-control">
+              <input class="pf-v5-c-form-control" type="text" id="rendezvous_ip" name="rendezvous_ip"
+                     placeholder="192.168.1.10" required>
+              <p class="pf-v5-c-form__helper-text pf-v5-u-font-size-sm">
+                IP address that will be assigned to the single node.
+              </p>
+            </div>
+          </div>
+        </section>
+
+        <!-- ── Networking ──────────────────────────────────────────── -->
+        <section class="pf-v5-c-form__section">
+          <div class="pf-v5-c-form__section-title">Static Networking</div>
+
+          <div class="pf-v5-c-form__group">
+            <div class="pf-v5-c-form__group-label">
+              <label class="pf-v5-c-form__label" for="gateway">
+                <span class="pf-v5-c-form__label-text">Gateway</span>
+                <span class="pf-v5-c-form__label-required" aria-hidden="true">&#42;</span>
+              </label>
+            </div>
+            <div class="pf-v5-c-form__group-control">
+              <input class="pf-v5-c-form-control" type="text" id="gateway" name="gateway"
+                     placeholder="192.168.1.1" required>
+            </div>
+          </div>
+
+          <div class="pf-v5-c-form__group">
+            <div class="pf-v5-c-form__group-label">
+              <label class="pf-v5-c-form__label" for="vm_mac">
+                <span class="pf-v5-c-form__label-text">NIC MAC address</span>
+                <span class="pf-v5-c-form__label-required" aria-hidden="true">&#42;</span>
+              </label>
+            </div>
+            <div class="pf-v5-c-form__group-control">
+              <input class="pf-v5-c-form-control" type="text" id="vm_mac" name="vm_mac"
+                     placeholder="52:54:00:aa:bb:cc" required>
+              <p class="pf-v5-c-form__helper-text pf-v5-u-font-size-sm">
+                MAC address of the rendezvous node's primary NIC. Both colon and dash separators are accepted.
+              </p>
+            </div>
+          </div>
+
+          <div class="pf-v5-c-form__group">
+            <div class="pf-v5-c-form__group-label">
+              <label class="pf-v5-c-form__label" for="machine_network">
+                <span class="pf-v5-c-form__label-text">Machine network CIDR</span>
+              </label>
+            </div>
+            <div class="pf-v5-c-form__group-control">
+              <input class="pf-v5-c-form-control" type="text" id="machine_network" name="machine_network"
+                     value="192.168.122.0/24" placeholder="192.168.122.0/24">
+            </div>
+          </div>
+
+          <div class="pf-v5-c-form__group">
+            <div class="pf-v5-c-form__group-label">
+              <label class="pf-v5-c-form__label" for="dns_server">
+                <span class="pf-v5-c-form__label-text">DNS server</span>
+              </label>
+            </div>
+            <div class="pf-v5-c-form__group-control">
+              <input class="pf-v5-c-form-control" type="text" id="dns_server" name="dns_server"
+                     value="8.8.8.8" placeholder="8.8.8.8">
+            </div>
+          </div>
+        </section>
+
+        <!-- ── Operator Configuration ────────────────────────────── -->
+        <section class="pf-v5-c-form__section">
+          <div class="pf-v5-c-form__section-title">Operator Configuration</div>
+
+          <div class="pf-v5-c-form__group">
+            <div class="pf-v5-c-form__group-label">
+              <label class="pf-v5-c-form__label" for="appliance_content">
+                <span class="pf-v5-c-form__label-text">Appliance content</span>
+              </label>
+            </div>
+            <div class="pf-v5-c-form__group-control">
+              <select class="pf-v5-c-form-control" id="appliance_content" name="appliance_content">
+                <option value="aap-full" selected>aap-full — AAP + Automation Orchestrator (recommended)</option>
+                <option value="aap">aap — Ansible Automation Platform only</option>
+                <option value="aap-with-ao">aap-with-ao — AAP + Automation Orchestrator</option>
+                <option value="ao">ao — Automation Orchestrator only</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="pf-v5-c-form__group">
+            <div class="pf-v5-c-form__group-label">
+              <label class="pf-v5-c-form__label" for="aap_namespace">
+                <span class="pf-v5-c-form__label-text">AAP namespace</span>
+              </label>
+            </div>
+            <div class="pf-v5-c-form__group-control">
+              <input class="pf-v5-c-form-control" type="text" id="aap_namespace" name="aap_namespace"
+                     value="aap" placeholder="aap">
+            </div>
+          </div>
+
+          <div class="pf-v5-c-form__group">
+            <div class="pf-v5-c-form__group-label">
+              <label class="pf-v5-c-form__label" for="ao_namespace">
+                <span class="pf-v5-c-form__label-text">AO namespace</span>
+              </label>
+            </div>
+            <div class="pf-v5-c-form__group-control">
+              <input class="pf-v5-c-form-control" type="text" id="ao_namespace" name="ao_namespace"
+                     value="automation-orchestrator" placeholder="automation-orchestrator">
+            </div>
+          </div>
+
+          <div class="pf-v5-c-form__group">
+            <div class="pf-v5-c-form__group-label pf-v5-u-pt-sm">
+              <span class="pf-v5-c-form__label-text">Options</span>
+            </div>
+            <div class="pf-v5-c-form__group-control">
+              <div class="pf-v5-c-check pf-v5-u-mt-xs">
+                <input class="pf-v5-c-check__input" type="checkbox" id="disconnected" name="disconnected" value="true"
+                       onchange="toggleDisconnected(this.checked)">
+                <label class="pf-v5-c-check__label" for="disconnected">Disconnected mode (embed dummy pull secret)</label>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ── Credentials ────────────────────────────────────────── -->
+        <section class="pf-v5-c-form__section">
+          <div class="pf-v5-c-form__section-title">Credentials</div>
+
+          <div class="pf-v5-c-form__group">
+            <div class="pf-v5-c-form__group-label">
+              <label class="pf-v5-c-form__label" for="pull_secret">
+                <span class="pf-v5-c-form__label-text">Pull secret</span>
+                <span class="pf-v5-c-form__label-required" aria-hidden="true">&#42;</span>
+              </label>
+            </div>
+            <div class="pf-v5-c-form__group-control">
+              <textarea class="pf-v5-c-form-control" id="pull_secret" name="pull_secret"
+                        rows="6" placeholder='{"auths": {"registry.redhat.io": {"auth": "..."}}}' required></textarea>
+              <p class="pf-v5-c-form__helper-text pf-v5-u-font-size-sm" id="pull-secret-hint">
+                Download from
+                <a href="https://console.redhat.com/openshift/install/pull-secret" target="_blank"
+                   rel="noopener">console.redhat.com</a>.
+                This value is embedded in the ISO and not stored on the server.
+              </p>
+              <p class="pf-v5-c-form__helper-text pf-v5-u-font-size-sm pf-v5-u-color-200" id="pull-secret-disconnected-hint" style="display:none;">
+                Disconnected mode: a dummy pull secret will be substituted automatically.
+              </p>
+            </div>
+          </div>
+
+          <div class="pf-v5-c-form__group">
+            <div class="pf-v5-c-form__group-label">
+              <label class="pf-v5-c-form__label" for="ssh_key">
+                <span class="pf-v5-c-form__label-text">SSH public key</span>
+              </label>
+            </div>
+            <div class="pf-v5-c-form__group-control">
+              <textarea class="pf-v5-c-form-control" id="ssh_key" name="ssh_key"
+                        rows="3" placeholder="ssh-rsa AAAA..."></textarea>
+              <p class="pf-v5-c-form__helper-text pf-v5-u-font-size-sm">
+                Optional. Enables SSH access to the node as <code>core@&lt;rendezvous-ip&gt;</code>.
+              </p>
+            </div>
+          </div>
+        </section>
+
+        <!-- ── Actions ────────────────────────────────────────────── -->
+        <div class="pf-v5-c-form__group pf-v5-u-mt-lg">
+          <div class="pf-v5-c-form__group-control">
+            <button class="pf-v5-c-button pf-m-primary" type="submit" id="submit-btn"
+                    {% if not iso_mode %}disabled title="openshift-install not found on this server"{% endif %}>
+              Generate agentconfig ISO
+            </button>
+            <span id="spinner" style="display:none; margin-left:1rem;" class="pf-v5-u-color-200">
+              Generating&hellip;
+            </span>
+          </div>
+        </div>
+
+      </form>
+    </div>
+  </div>
+
+  <p class="pf-v5-u-mt-md pf-v5-u-font-size-sm pf-v5-u-color-200">
+    Requires OpenShift {{ ocp_version }} &mdash;
+    generated ISO must be used with the matching appliance ISO.
+  </p>
+</main>
+
+<script>
+const form = document.getElementById('config-form');
+const submitBtn = document.getElementById('submit-btn');
+const spinner = document.getElementById('spinner');
+const errorSection = document.getElementById('error-section');
+const errorMsg = document.getElementById('error-msg');
+const resultSection = document.getElementById('result-section');
+const agentconfigLink = document.getElementById('agentconfig-link');
+const kubeconfigLink = document.getElementById('kubeconfig-link');
+const kubeadminLink = document.getElementById('kubeadmin-link');
+const authNote = document.getElementById('auth-note');
+
+form.addEventListener('submit', async function(e) {
+  e.preventDefault();
+
+  // Basic client-side validation
+  const isDisconnected = form.elements['disconnected'].checked;
+  const required = ['base_domain', 'rendezvous_ip', 'gateway', 'vm_mac'];
+  if (!isDisconnected) required.push('pull_secret');
+  for (const name of required) {
+    const el = form.elements[name];
+    if (!el.value.trim()) {
+      showError(`"${name.replace('_', ' ')}" is required.`);
+      el.focus();
+      return;
+    }
+  }
+
+  errorSection.style.display = 'none';
+  resultSection.style.display = 'none';
+  submitBtn.disabled = true;
+  spinner.style.display = 'inline';
+
+  const params = new URLSearchParams();
+  for (const el of form.elements) {
+    if (!el.name || el.disabled) continue;
+    if (el.type === 'checkbox') {
+      params.set(el.name, el.checked ? 'true' : 'false');
+    } else {
+      params.set(el.name, el.value);
+    }
+  }
+
+  try {
+    const resp = await fetch('/generate', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+      body: params.toString(),
+    });
+
+    const data = await resp.json();
+
+    if (!resp.ok) {
+      showError(data.detail || `Server error (HTTP ${resp.status})`);
+      return;
+    }
+
+    agentconfigLink.href = data.download_url;
+    if (data.kubeconfig_url) {
+      kubeconfigLink.href = data.kubeconfig_url;
+      kubeconfigLink.style.display = '';
+    } else {
+      kubeconfigLink.style.display = 'none';
+    }
+    if (data.kubeadmin_url) {
+      kubeadminLink.href = data.kubeadmin_url;
+      kubeadminLink.style.display = '';
+    } else {
+      kubeadminLink.style.display = 'none';
+    }
+    authNote.style.display = (data.kubeconfig_url || data.kubeadmin_url) ? '' : 'none';
+    resultSection.style.display = '';
+  } catch (err) {
+    showError(err.message || 'Unexpected error — check server logs.');
+  } finally {
+    submitBtn.disabled = false;
+    spinner.style.display = 'none';
+  }
+});
+
+function showError(msg) {
+  errorMsg.textContent = msg;
+  errorSection.style.display = '';
+  errorSection.scrollIntoView({behavior: 'smooth', block: 'nearest'});
+}
+
+function toggleDisconnected(checked) {
+  const ps = document.getElementById('pull_secret');
+  const hint = document.getElementById('pull-secret-hint');
+  const disconnectedHint = document.getElementById('pull-secret-disconnected-hint');
+  ps.disabled = checked;
+  ps.style.opacity = checked ? '0.4' : '';
+  ps.style.cursor = checked ? 'not-allowed' : '';
+  if (checked) ps.removeAttribute('required'); else ps.setAttribute('required', '');
+  hint.style.display = checked ? 'none' : '';
+  disconnectedHint.style.display = checked ? '' : 'none';
+}
+</script>
+
+</body>
+</html>

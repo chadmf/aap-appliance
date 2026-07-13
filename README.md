@@ -193,6 +193,16 @@ RENDEZVOUS_IP=192.168.56.100 \
 
 This creates a fresh VM, attaches `appliance.iso` and `agentconfig.noarch.iso`, and starts the installer. Once OCP is fully installed you can export the running VM as an OVA to distribute to others.
 
+If the agentconfig ISO was generated separately (e.g. downloaded from the webapp), pass it explicitly instead of relying on the `--output-dir` layout:
+
+```bash
+VM_MAC=08:00:27:61:6a:4a \
+RENDEZVOUS_IP=192.168.56.100 \
+./scripts/launch-appliance-vbox.sh \
+  --appliance-iso /path/to/appliance.iso \
+  --agentconfig-iso ~/Downloads/agentconfig.noarch.iso
+```
+
 #### Distribution workflow — import a pre-built OVA
 
 If you have a fully-installed appliance OVA (exported from a VM created by `launch-appliance-vbox.sh`), use `scripts/import-appliance-vbox.sh` to import it on any VirtualBox host:
@@ -228,6 +238,15 @@ VM_MAC=52:54:00:aa:bb:01 \
 ```
 
 `launch-appliance.sh` copies the ISOs to the libvirt image pool and calls `virt-install`. Use `--replace` to destroy and recreate an existing VM of the same name.
+
+If the agentconfig ISO was generated separately (e.g. downloaded from the webapp), pass it explicitly:
+
+```bash
+VM_MAC=52:54:00:aa:bb:01 \
+./scripts/launch-appliance.sh \
+  --appliance-iso /path/to/appliance.iso \
+  --agentconfig-iso ~/Downloads/agentconfig.noarch.iso
+```
 
 #### Raw disk image
 

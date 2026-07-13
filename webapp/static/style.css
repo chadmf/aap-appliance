@@ -1,0 +1,44 @@
+/* Constrain main content width */
+.aap-page-main {
+  max-width: 860px;
+  margin: 0 auto;
+  padding: 1.5rem 1rem;
+}
+
+
+/* Spacing for form sections */
+.pf-v5-c-form__section + .pf-v5-c-form__section {
+  margin-top: 1.5rem;
+}
+
+/* Make textareas monospace */
+textarea.pf-v5-c-form-control {
+  font-family: 'Liberation Mono', 'Courier New', monospace;
+  font-size: 0.8rem;
+}
+
+/* Result section */
+#result-section {
+  margin-top: 1.5rem;
+}
+
+/* Masthead logo area */
+.aap-masthead-logo {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.aap-masthead-divider {
+  width: 1px;
+  height: 24px;
+  background: rgba(255,255,255,0.3);
+}
+
+.aap-masthead-app-name {
+  color: white;
+  font-size: 1rem;
+  font-weight: 400;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+}

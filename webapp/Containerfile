@@ -1,0 +1,50 @@
+# Build FROM the aap-appliance base image — this gives us nmstatectl already installed
+# (the same dependency the aap-appliance container needs for openshift-install to validate
+# NMState networkConfig).  We then download the pinned openshift-install binary so the
+# webapp can generate agentconfig ISOs server-side without any runtime dependencies.
+FROM quay.io/edge-infrastructure/openshift-appliance@sha256:bff07cb9d68768a2689e1dd9b0fc38fca9ad6cebd34fa16a1d9a319aedd3b20c
+
+ARG OCP_VERSION=4.22.0
+ARG CPU_ARCH=x86_64
+
+# Install pip and nmstate (both absent from the upstream openshift-appliance base).
+# openssl is needed for self-signed TLS cert generation in entrypoint.sh.
+RUN rm -f /etc/yum.repos.d/base-4-20-rhel9.repo && \
+    printf '[c9s-baseos]\nname=CentOS Stream 9 BaseOS\nbaseurl=https://mirror.stream.centos.org/9-stream/BaseOS/x86_64/os/\ngpgcheck=0\nenabled=1\n\n[c9s-appstream]\nname=CentOS Stream 9 AppStream\nbaseurl=https://mirror.stream.centos.org/9-stream/AppStream/x86_64/os/\ngpgcheck=0\nenabled=1\n' > /etc/yum.repos.d/centos-stream.repo && \
+    microdnf install -y python3-pip nmstate openssl && \
+    microdnf clean all && \
+    rm -f /etc/yum.repos.d/centos-stream.repo
+
+# Download openshift-install pinned to the same OCP version as the appliance.
+# This version must match appliance-config.yaml ocpRelease.version.
+RUN curl -sL \
+    "https://mirror.openshift.com/pub/openshift-v4/${CPU_ARCH}/clients/ocp/${OCP_VERSION}/openshift-install-linux.tar.gz" \
+    | tar -xz -C /usr/local/bin openshift-install && \
+    chmod +x /usr/local/bin/openshift-install
+
+WORKDIR /webapp
+COPY requirements.txt .
+RUN pip3 install --no-cache-dir -r requirements.txt
+
+COPY . .
+RUN chmod +x entrypoint.sh
+
+# APPLIANCE_ISO_URL: URL where appliance.iso is hosted (S3, CDN, etc.)
+# OPENSHIFT_INSTALL_BIN / NMSTATECTL_BIN: override binary paths (for local dev)
+# TLS_DISABLED: set to "true" to run plain HTTP (e.g. behind a TLS-terminating proxy)
+# TLS_CERT_FILE / TLS_KEY_FILE: paths to an existing cert+key (skip auto-generation)
+# PORT: listening port (default 8443 with TLS, 8000 with TLS_DISABLED=true)
+ENV APPLIANCE_ISO_PATH="" \
+    APPLIANCE_ISO_URL="" \
+    OPENSHIFT_INSTALL_BIN="" \
+    NMSTATECTL_BIN="" \
+    TLS_DISABLED="" \
+    TLS_CERT_FILE="" \
+    TLS_KEY_FILE="" \
+    PORT=""
+# AUTH_USERNAME and AUTH_PASSWORD are intentionally not set here —
+# they carry credentials and should be supplied at runtime only.
+
+EXPOSE 8443
+
+CMD ["./entrypoint.sh"]

@@ -1,0 +1,109 @@
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: orchestrator-postgres-secret
+  namespace: ${AO_NAMESPACE}
+stringData:
+  database: orchestrator
+  host: orchestrator-postgres-rw.${AO_NAMESPACE}.svc
+  password: ${AO_DB_PASSWORD}
+  port: "5432"
+  username: orchestrator
+type: kubernetes.io/basic-auth
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: temporal-postgres-secret
+  namespace: ${AO_NAMESPACE}
+stringData:
+  database: temporal
+  host: orchestrator-postgres-rw.${AO_NAMESPACE}.svc
+  password: ${AO_DB_PASSWORD}
+  port: "5432"
+  username: orchestrator
+type: kubernetes.io/basic-auth
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: temporal-visibility-postgres-secret
+  namespace: ${AO_NAMESPACE}
+stringData:
+  database: temporal_visibility
+  host: orchestrator-postgres-rw.${AO_NAMESPACE}.svc
+  password: ${AO_DB_PASSWORD}
+  port: "5432"
+  username: orchestrator
+type: kubernetes.io/basic-auth
+---
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: orchestrator-postgres
+  namespace: ${AO_NAMESPACE}
+spec:
+  bootstrap:
+    initdb:
+      owner: orchestrator
+      secret:
+        name: orchestrator-postgres-secret
+  imageName: ghcr.io/cloudnative-pg/postgresql:15@sha256:04598d2058f446fcbc3416838740e515e7d39c311d0bca57778b50c302db1ae5
+  instances: 1
+  storage:
+    size: 5Gi
+---
+apiVersion: postgresql.cnpg.io/v1
+kind: Database
+metadata:
+  name: orchestrator
+  namespace: ${AO_NAMESPACE}
+spec:
+  cluster:
+    name: orchestrator-postgres
+  name: orchestrator
+  owner: orchestrator
+---
+apiVersion: postgresql.cnpg.io/v1
+kind: Database
+metadata:
+  name: temporal
+  namespace: ${AO_NAMESPACE}
+spec:
+  cluster:
+    name: orchestrator-postgres
+  name: temporal
+  owner: orchestrator
+---
+apiVersion: postgresql.cnpg.io/v1
+kind: Database
+metadata:
+  name: temporal-visibility
+  namespace: ${AO_NAMESPACE}
+spec:
+  cluster:
+    name: orchestrator-postgres
+  name: temporal_visibility
+  owner: orchestrator
+---
+apiVersion: aap.ansible.com/v1alpha1
+kind: AutomationOrchestrator
+metadata:
+  name: automation-orchestrator
+  namespace: ${AO_NAMESPACE}
+spec:
+  ingress:
+    type: Route
+  postgres:
+    backendDatabase:
+      secretRef:
+        name: orchestrator-postgres-secret
+    caCertSecretRef:
+      name: orchestrator-postgres-ca
+    host: orchestrator-postgres-rw
+    port: 5432
+    sslMode: verify-ca
+    temporalDatabase:
+      secretRef:
+        name: temporal-postgres-secret
