@@ -98,13 +98,13 @@ Tests mock `create_iso` — no real `openshift-install` is needed.
 
 ```bash
 # From the repo root
-sudo podman build -t aap-webapp:latest -f webapp/Containerfile webapp/
+sudo podman build -t aap-appliance-webapp:latest -f webapp/Containerfile webapp/
 
 # Or with custom OCP version (must match appliance-config.yaml)
 sudo podman build \
   --build-arg OCP_VERSION=4.22.0 \
   --build-arg CPU_ARCH=x86_64 \
-  -t aap-webapp:latest \
+  -t aap-appliance-webapp:latest \
   -f webapp/Containerfile webapp/
 ```
 
@@ -137,7 +137,7 @@ in the certificate's Subject Alternative Name automatically.
 **Minimal** — verify the UI is reachable, no auth, self-signed TLS:
 
 ```bash
-sudo podman run --rm -p 8443:8443 aap-webapp:latest
+sudo podman run --rm -p 8443:8443 aap-appliance-webapp:latest
 ```
 
 **With auth** — credentials required on every route except `/health`:
@@ -146,42 +146,43 @@ sudo podman run --rm -p 8443:8443 aap-webapp:latest
 sudo podman run --rm -p 8443:8443 \
   -e AUTH_USERNAME=demo \
   -e AUTH_PASSWORD=changeme \
-  aap-webapp:latest
+  aap-appliance-webapp:latest
 ```
 
 **Appliance ISO served locally** — mounts `appliance.iso` so the webapp
-streams it at `/appliance.iso`:
+streams it at `/appliance.iso`. The `:z` flag relabels the file for SELinux
+so the container can read it:
 
 ```bash
 sudo podman run --rm -p 8443:8443 \
-  -v /path/to/build:/build:ro,Z \
-  -e APPLIANCE_ISO_PATH=/build/appliance.iso \
+  -v /path/to/appliance.iso:/data/appliance.iso:ro,z \
+  -e APPLIANCE_ISO_PATH=/data/appliance.iso \
   -e AUTH_USERNAME=demo \
   -e AUTH_PASSWORD=changeme \
-  aap-webapp:latest
+  aap-appliance-webapp:latest
 ```
 
 **Appliance ISO on S3** — shows a direct download link, no local file needed:
 
 ```bash
-sudo podman run --rm --net=host -p 8443:8443 \
+sudo podman run --rm -p 8443:8443 \
   -e APPLIANCE_ISO_URL=https://s3.amazonaws.com/mybucket/appliance.iso \
   -e AUTH_USERNAME=demo \
   -e AUTH_PASSWORD=changeme \
-  aap-webapp:latest
+  aap-appliance-webapp:latest
 ```
 
 **Real TLS certificate** (e.g. Let's Encrypt):
 
 ```bash
 sudo podman run --rm --net=host \
-  -v /etc/letsencrypt/live/yourdomain.com:/certs:ro,Z \
+  -v /etc/letsencrypt/live/yourdomain.com:/certs:ro,z \
   -e TLS_CERT_FILE=/certs/fullchain.pem \
   -e TLS_KEY_FILE=/certs/privkey.pem \
   -e APPLIANCE_ISO_URL=https://s3.amazonaws.com/mybucket/appliance.iso \
   -e AUTH_USERNAME=demo \
   -e AUTH_PASSWORD=changeme \
-  aap-webapp:latest
+  aap-appliance-webapp:latest
 ```
 
 **Behind a TLS-terminating proxy** — plain HTTP, port 8000:
@@ -192,7 +193,7 @@ sudo podman run --rm -p 8000:8000 \
   -e APPLIANCE_ISO_URL=https://s3.amazonaws.com/mybucket/appliance.iso \
   -e AUTH_USERNAME=demo \
   -e AUTH_PASSWORD=changeme \
-  aap-webapp:latest
+  aap-appliance-webapp:latest
 ```
 
 **Phase 1 binary cache** — use the `openshift-install` cached during a prior
@@ -200,9 +201,9 @@ Phase 1 build instead of the one baked into the image:
 
 ```bash
 sudo podman run --rm -p 8443:8443 \
-  -v /path/to/build/assets:/assets:Z \
+  -v /path/to/build/assets:/assets:z \
   -e APPLIANCE_ISO_URL=https://example.com/appliance.iso \
-  aap-webapp:latest
+  aap-appliance-webapp:latest
 ```
 
 The webapp auto-detects the binary at `/assets/cache/4.22.0-x86_64/openshift-install`.
@@ -237,18 +238,23 @@ browsers recognise the cert for direct-IP access.
 
 ```bash
 sudo podman run -d \
-  --name aap-webapp \
+  --name aap-appliance-webapp \
   --restart=always \
-  --net=host \
-  -e APPLIANCE_ISO_URL=https://s3.amazonaws.com/mybucket/appliance.iso \
+  -p 443:8443 \
+  -v /home/ec2-user/appliance.iso:/data/appliance.iso:ro,z \
+  -e APPLIANCE_ISO_PATH=/data/appliance.iso \
   -e AUTH_USERNAME=demo \
   -e AUTH_PASSWORD=changeme \
-  aap-webapp:latest
+  aap-appliance-webapp:latest
 ```
 
-Point a browser at `https://<EC2-public-IP>:8443`. You will see a browser
-security warning on the first visit because the certificate is self-signed — click
+Point a browser at `https://<EC2-public-IP>`. You will see a browser security
+warning on the first visit because the certificate is self-signed — click
 through once and the connection is encrypted from that point on.
+
+> **SELinux note:** the `:z` flag on the volume mount relabels `appliance.iso`
+> with the shared container SELinux context. Without it the container gets a
+> `Permission denied` error even when running as root.
 
 ### Using a real certificate
 
@@ -256,15 +262,15 @@ If you have a certificate (e.g. from Let's Encrypt via certbot):
 
 ```bash
 sudo podman run -d \
-  --name aap-webapp \
+  --name aap-appliance-webapp \
   --net=host \
-  -v /etc/letsencrypt/live/yourdomain.com:/certs:ro,Z \
+  -v /etc/letsencrypt/live/yourdomain.com:/certs:ro,z \
   -e TLS_CERT_FILE=/certs/fullchain.pem \
   -e TLS_KEY_FILE=/certs/privkey.pem \
   -e APPLIANCE_ISO_URL=https://s3.amazonaws.com/mybucket/appliance.iso \
   -e AUTH_USERNAME=demo \
   -e AUTH_PASSWORD=changeme \
-  aap-webapp:latest
+  aap-appliance-webapp:latest
 ```
 
 ### Running behind a TLS-terminating proxy
@@ -274,13 +280,13 @@ avoid double-encryption:
 
 ```bash
 sudo podman run -d \
-  --name aap-webapp \
+  --name aap-appliance-webapp \
   -p 8000:8000 \
   -e TLS_DISABLED=true \
   -e APPLIANCE_ISO_URL=https://s3.amazonaws.com/mybucket/appliance.iso \
   -e AUTH_USERNAME=demo \
   -e AUTH_PASSWORD=changeme \
-  aap-webapp:latest
+  aap-appliance-webapp:latest
 ```
 
 ---

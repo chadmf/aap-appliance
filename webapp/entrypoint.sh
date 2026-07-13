@@ -44,10 +44,16 @@ if [[ -z "$CERT_FILE" ]]; then
 
     echo "==> Generating self-signed TLS certificate..."
 
-    # Query EC2 instance metadata (IMDSv1).  Times out quickly when not on EC2.
-    PUBLIC_IP=$(curl -sf --max-time 2 \
+    # Query EC2 instance metadata (IMDSv2 with IMDSv1 fallback).
+    # Times out quickly when not on EC2.
+    IMDS_TOKEN=$(curl -sf --max-time 2 -X PUT \
+        -H "X-aws-ec2-metadata-token-ttl-seconds: 60" \
+        http://169.254.169.254/latest/api/token 2>/dev/null || true)
+    IMDS_ARGS=()
+    [[ -n "$IMDS_TOKEN" ]] && IMDS_ARGS=(-H "X-aws-ec2-metadata-token: ${IMDS_TOKEN}")
+    PUBLIC_IP=$(curl -sf --max-time 2 "${IMDS_ARGS[@]}" \
         http://169.254.169.254/latest/meta-data/public-ipv4 2>/dev/null || true)
-    PRIVATE_IP=$(curl -sf --max-time 2 \
+    PRIVATE_IP=$(curl -sf --max-time 2 "${IMDS_ARGS[@]}" \
         http://169.254.169.254/latest/meta-data/local-ipv4 2>/dev/null || true)
 
     # Build Subject Alternative Name — include all IPs the server may be reached at

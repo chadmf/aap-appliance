@@ -22,7 +22,7 @@
     <a href="{{ appliance_iso_url }}"
        class="pf-v5-c-button pf-m-secondary pf-m-small"
        style="color:white; border-color:rgba(255,255,255,0.4);"
-       download>
+       target="_blank">
       Download Appliance ISO
     </a>
     {% endif %}
@@ -80,9 +80,9 @@
           booting the appliance (the appliance ISO is the primary boot drive).
         </p>
         <div style="display:flex; flex-wrap:wrap; gap:0.5rem; align-items:center;">
-          <a id="agentconfig-link" class="pf-v5-c-button pf-m-primary pf-m-small" href="#" download>Download agentconfig.noarch.iso</a>
-          <a id="kubeconfig-link" class="pf-v5-c-button pf-m-secondary pf-m-small" href="#" download style="display:none;">Download kubeconfig</a>
-          <a id="kubeadmin-link" class="pf-v5-c-button pf-m-secondary pf-m-small" href="#" download style="display:none;">Download kubeadmin-password</a>
+          <a id="agentconfig-link" class="pf-v5-c-button pf-m-primary pf-m-small" href="#" target="_blank">Download agentconfig.noarch.iso</a>
+          <a id="kubeconfig-link" class="pf-v5-c-button pf-m-secondary pf-m-small" href="#" target="_blank" style="display:none;">Download kubeconfig</a>
+          <a id="kubeadmin-link" class="pf-v5-c-button pf-m-secondary pf-m-small" href="#" target="_blank" style="display:none;">Download kubeadmin-password</a>
         </div>
         <p id="auth-note" class="pf-v5-u-mt-xs pf-v5-u-font-size-sm pf-v5-u-color-200" style="display:none;">
           Cluster credentials are temporary — download before generating a new ISO.
@@ -403,6 +403,7 @@ form.addEventListener('submit', async function(e) {
     }
     authNote.style.display = (data.kubeconfig_url || data.kubeadmin_url) ? '' : 'none';
     resultSection.style.display = '';
+    resultSection.scrollIntoView({behavior: 'smooth', block: 'start'});
   } catch (err) {
     showError(err.message || 'Unexpected error — check server logs.');
   } finally {

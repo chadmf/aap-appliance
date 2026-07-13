@@ -238,7 +238,7 @@ async def download_kubeconfig(job_id: str) -> FileResponse:
     path = _TMP_BASE / job_id / 'auth' / 'kubeconfig'
     if not path.exists():
         raise HTTPException(status_code=404, detail='kubeconfig not found or expired.')
-    return FileResponse(path=path, media_type='text/plain', filename='kubeconfig')
+    return FileResponse(path=path, media_type='application/octet-stream', filename='kubeconfig')
 
 
 @app.get('/download/{job_id}/kubeadmin-password', dependencies=[Depends(_require_auth)])
@@ -248,7 +248,7 @@ async def download_kubeadmin_password(job_id: str) -> FileResponse:
     path = _TMP_BASE / job_id / 'auth' / 'kubeadmin-password'
     if not path.exists():
         raise HTTPException(status_code=404, detail='kubeadmin-password not found or expired.')
-    return FileResponse(path=path, media_type='text/plain', filename='kubeadmin-password')
+    return FileResponse(path=path, media_type='application/octet-stream', filename='kubeadmin-password')
 
 
 @app.get('/health')

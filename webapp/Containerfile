@@ -47,4 +47,5 @@ ENV APPLIANCE_ISO_PATH="" \
 
 EXPOSE 8443
 
+ENTRYPOINT []
 CMD ["./entrypoint.sh"]
