@@ -20,7 +20,7 @@ metadata:
   namespace: openshift-marketplace
 spec:
   sourceType: grpc
-  image: registry.appliance.openshift.com:22625/redhat/redhat-operator-index@sha256:4b67cc482eb354639230cf78c80b39e087bd082ec6bd791977fa865d6d150f55
+  image: registry.appliance.openshift.com:22625/redhat/redhat-operator-index@sha256:3de81819ac68235e76a26e4feccd5c1b4c3921e1d4a338ac96ba55d43130fb2e
   displayName: Red Hat Operators
   publisher: Red Hat
 ---

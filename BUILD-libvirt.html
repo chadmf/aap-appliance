@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>AAP Appliance — Build Cookbook (libvirt / qemu-kvm)</title>
+<style>
+  body { font-family: Arial, Helvetica, sans-serif; font-size: 11pt; line-height: 1.45; margin: 48px; color: #222; }
+  h1 { font-size: 20pt; border-bottom: 1px solid #ccc; padding-bottom: 8px; }
+  h2 { font-size: 14pt; margin-top: 28px; }
+  h3 { font-size: 12pt; margin-top: 18px; }
+  code { font-family: Consolas, "Courier New", monospace; font-size: 9.5pt; background: #f3f3f3; padding: 1px 4px; }
+  pre { background: #f3f3f3; border: 1px solid #ddd; padding: 12px; font-size: 9pt; white-space: pre-wrap; }
+  pre code { background: none; padding: 0; }
+  table { border-collapse: collapse; width: 100%; margin: 12px 0; font-size: 10pt; }
+  th, td { border: 1px solid #aaa; padding: 6px 8px; vertical-align: top; text-align: left; }
+  th { background: #eee; }
+  blockquote { border-left: 3px solid #888; margin: 12px 0; padding-left: 12px; color: #444; }
+  a { color: #1155cc; }
+  ul, ol { margin: 8px 0 8px 22px; }
+  p { margin: 8px 0; }
+</style>
+</head>
+<body>
+<h1>AAP Appliance — repeatable build cookbook (libvirt / qemu-kvm)</h1><p>End-to-end runbook for building an appliance ISO and booting it under **virt-manager /</p><p>libvirt / qemu-kvm**. Product background lives in <a href="README.md">README.md</a>; this file is</p><p>the build + launch sequence that actually works.</p><p>Tested path: <strong>AO-only live ISO</strong> on the libvirt <code>default</code> NAT network (<code>192.168.122.0/24</code>)</p><p>with rootless Podman. Change <code>APPLIANCE_CONTENT</code> for AAP or combined builds.</p><h2>What you need</h2><table><tr><th>Requirement</th><th>Notes</th></tr><tr><td>Disk</td><td>≥ <strong>200 GB free</strong> in the output directory (OCP mirror + ISO). A successful live ISO is ~40 GB.</td></tr><tr><td>Host RAM/CPU for the VM</td><td>≥ <strong>32 GB</strong> RAM and <strong>8 vCPUs</strong> for the guest (do not over-allocate vs the host)</td></tr><tr><td>Build tools</td><td><code>podman</code>, <code>skopeo</code>, <code>opm</code>, <code>jq</code>, <code>python3</code></td></tr><tr><td>Hypervisor</td><td>libvirt + qemu-kvm + virt-manager (<code>./scripts/libvirt-prereqs.sh</code>)</td></tr><tr><td>Pull secret (OpenShift)</td><td>From <a href="https://console.redhat.com/openshift/install/pull-secret">console.redhat.com/openshift/install/pull-secret</a></td></tr><tr><td>Pull secret (<code>quay.io/aap</code>)</td><td>Robot/token with pull on <code>quay.io/aap</code> (AO / AAP pre-release). <strong>Not</strong> in a stock OpenShift pull secret.</td></tr><tr><td>SSH public key</td><td>Mounted into the builder; becomes the <code>core</code> user key on the node</td></tr></table><p>Rootless Podman is fine if you build and run as the same user (<code>localhost/aap-appliance:latest</code>).</p><h3>Defaults used below</h3><table><tr><th>Setting</th><th>Value</th></tr><tr><td>Libvirt network</td><td><code>default</code> (<code>192.168.122.0/24</code>)</td></tr><tr><td>Rendezvous IP</td><td><code>192.168.122.100</code></td></tr><tr><td>VM MAC</td><td><code>52:54:00:aa:bb:01</code></td></tr><tr><td>VM name</td><td><code>aap-appliance</code></td></tr><tr><td>Content</td><td><code>ao</code> (Automation Orchestrator + CloudNativePG)</td></tr></table><p>Libvirt’s DHCP <strong>does</strong> send gateway/DNS, so you do <strong>not</strong> set <code>GATEWAY</code> / <code>VM_MAC</code> at</p><p>build time (unlike VirtualBox). You <strong>do</strong> pin the MAC via a DHCP reservation so the</p><p>node always gets <code>RENDEZVOUS_IP</code>.</p><h2>Critical: two different auth files</h2><p>Mixing these wrong is the #1 failure mode.</p><h3>1. Merged pull secret — for <code>podman run</code> (appliance mirror)</h3><p>Must include <strong>both</strong>:</p><ul><li>OpenShift entries (<code>cloud.openshift.com</code>, <code>quay.io</code>, <code>registry.redhat.io</code>, …) — for <code>quay.io/openshift-release-dev/ocp-v4.0-art-dev</code></li><li><code>quay.io/aap</code> — for AO / AAP pre-release images</li></ul><p><strong>Do not</strong> overwrite the OpenShift <code>quay.io</code> entry with the AAP robot.</p><pre><code># Adjust paths to your OpenShift pull secret and AAP Quay auth JSON
+python3 - &lt;&lt;&#x27;PY&#x27;
+import json
+from pathlib import Path
+
+openshift = json.loads(Path.home().joinpath(&quot;Downloads/pull-secret.txt&quot;).read_text())
+aap = json.loads(Path.home().joinpath(&quot;aap-appliance-output/aap-only-auth.json&quot;).read_text())
+
+merged = {&quot;auths&quot;: dict(openshift[&quot;auths&quot;])}
+merged[&quot;auths&quot;][&quot;quay.io/aap&quot;] = aap[&quot;auths&quot;][&quot;quay.io/aap&quot;]  # overlay ONLY this key
+
+out = Path.home() / &quot;aap-appliance-output&quot; / &quot;pull-secret-merged.json&quot;
+out.parent.mkdir(parents=True, exist_ok=True)
+out.write_text(json.dumps(merged))
+print(&quot;wrote&quot;, out)
+print(&quot;keys:&quot;, sorted(merged[&quot;auths&quot;]))
+PY</code></pre><p>Sanity checks:</p><pre><code>MERGED=~/aap-appliance-output/pull-secret-merged.json
+
+skopeo inspect --authfile &quot;$MERGED&quot; \
+  docker://quay.io/openshift-release-dev/ocp-release:4.22.0-x86_64 &gt;/dev/null \
+  &amp;&amp; echo &quot;OCP: ok&quot;
+
+skopeo inspect --authfile &quot;$MERGED&quot; \
+  docker://quay.io/aap/ansible-automation-platform/automation-orchestrator-operator-index:main &gt;/dev/null \
+  &amp;&amp; echo &quot;AO: ok&quot;</code></pre><h3>2. AAP-only authfile — for <code>./scripts/update-ao-images.sh</code></h3><p><code>opm render</code> often prefers generic <code>quay.io</code> creds over <code>quay.io/aap</code>. Use a minimal</p><p>authfile that maps both hosts to the AAP robot, and install it where containers look:</p><pre><code>python3 - &lt;&lt;&#x27;PY&#x27;
+import json
+from pathlib import Path
+
+src = json.loads(Path.home().joinpath(&quot;aap-appliance-output/aap-only-auth.json&quot;).read_text())
+cred = src[&quot;auths&quot;].get(&quot;quay.io/aap&quot;) or src[&quot;auths&quot;][&quot;quay.io&quot;]
+out = {&quot;auths&quot;: {&quot;quay.io/aap&quot;: cred, &quot;quay.io&quot;: cred}}
+path = Path.home() / &quot;aap-appliance-output&quot; / &quot;aap-only-auth.json&quot;
+path.write_text(json.dumps(out))
+print(&quot;wrote&quot;, path)
+PY
+
+mkdir -p &quot;${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/containers&quot;
+cp ~/aap-appliance-output/aap-only-auth.json \
+  &quot;${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/containers/auth.json&quot;</code></pre><p>After pin updates, restore the <strong>merged</strong> secret into containers auth:</p><pre><code>cp ~/aap-appliance-output/pull-secret-merged.json \
+  &quot;${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/containers/auth.json&quot;</code></pre><h2>One-time host setup (libvirt)</h2><pre><code>cd ~/git/aap-appliance
+./scripts/libvirt-prereqs.sh</code></pre><p>Confirm the default network is up:</p><pre><code>sudo virsh net-list --all
+sudo virsh net-start default 2&gt;/dev/null || true
+sudo virsh net-autostart default</code></pre><h2>Repeatable build sequence</h2><p>Run from the repo root.</p><h3>Step 0 — clean leftovers from a failed builder run</h3><pre><code># oc-mirror leaves a listener; next run fails with:
+#   [Executor] 55000 is already bound and cannot be used
+fuser -k 55000/tcp 2&gt;/dev/null || true
+fuser -k 5005/tcp 2&gt;/dev/null || true
+podman ps -q --filter ancestor=localhost/aap-appliance:latest | xargs -r podman stop</code></pre><p>Only wipe the mirror cache if a previous run was <strong>killed mid-copy</strong> and you see</p><p><code>manifest.json: no such file or directory</code>:</p><pre><code>rm -rf ./build/cache</code></pre><h3>Step 1 — refresh image pins</h3><p><code>quay.io/operatorhubio/catalog</code> digests go stale quickly (<code>manifest unknown</code> after</p><p>nearly completing the mirror). Refresh before meaningful rebuilds:</p><pre><code># AAP GA pins (skip if AO-only)
+./scripts/update-aap-images.sh --authfile ~/aap-appliance-output/pull-secret-merged.json
+
+# AO + CloudNativePG (needs AAP-only authfile)
+mkdir -p &quot;${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/containers&quot;
+cp ~/aap-appliance-output/aap-only-auth.json \
+  &quot;${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/containers/auth.json&quot;
+./scripts/update-ao-images.sh --authfile ~/aap-appliance-output/aap-only-auth.json
+cp ~/aap-appliance-output/pull-secret-merged.json \
+  &quot;${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/containers/auth.json&quot;
+
+git diff --stat</code></pre><h3>Step 2 — bake pins into the builder image</h3><pre><code>podman build -t localhost/aap-appliance:latest .</code></pre><p>Editing <code>config/</code> / <code>assets/</code> on disk does nothing until this rebuild.</p><h3>Step 3 — build the appliance ISO (libvirt / DHCP)</h3><p>No <code>GATEWAY</code> / <code>VM_MAC</code> env vars — libvirt DHCP handles gateway and DNS. The MAC is</p><p>enforced later via DHCP reservation + <code>launch-appliance.sh</code>.</p><pre><code>mkdir -p ./build
+
+podman run --rm --privileged --net=host \
+  -e BASE_DOMAIN=example.com \
+  -e RENDEZVOUS_IP=192.168.122.100 \
+  -e MACHINE_NETWORK=192.168.122.0/24 \
+  -e APPLIANCE_CONTENT=ao \
+  -e DISCONNECTED=true \
+  -v &quot;$HOME/aap-appliance-output/pull-secret-merged.json:/run/secrets/pull-secret:Z&quot; \
+  -v &quot;$HOME/.ssh/id_rsa.pub:/run/secrets/ssh-key:Z&quot; \
+  -v &quot;$(pwd)/build:/assets:Z&quot; \
+  localhost/aap-appliance:latest</code></pre><p>Cold cache: <strong>30–90+ minutes</strong>. Warm cache after a near-success: ~10 minutes.</p><h3>Step 4 — verify outputs</h3><pre><code>build/appliance.iso                         # ~40 GB live ISO
+build/cluster-config/agentconfig.noarch.iso # second CD-ROM
+build/cluster-config/auth/kubeconfig
+build/cluster-config/auth/kubeadmin-password</code></pre><h2>Launch under virt-manager / libvirt</h2><h3>Reserve the rendezvous IP</h3><p>MAC and IP must match what you pass to <code>launch-appliance.sh</code>:</p><pre><code>./scripts/dhcp-reserve.sh --mac 52:54:00:aa:bb:01 --ip 192.168.122.100</code></pre><h3>Create and start the VM</h3><p><code>launch-appliance.sh</code> copies ISOs into <code>/var/lib/libvirt/images/</code> and runs <code>virt-install</code></p><p>(32 GB RAM / 8 vCPUs by default). The domain then shows up in <strong>virt-manager</strong>.</p><pre><code>VM_MAC=52:54:00:aa:bb:01 \
+RENDEZVOUS_IP=192.168.122.100 \
+./scripts/launch-appliance.sh --output-dir ./build --replace</code></pre><p>Equivalent explicit flags:</p><pre><code>./scripts/launch-appliance.sh \
+  --output-dir ./build \
+  --mac 52:54:00:aa:bb:01 \
+  --rendezvous-ip 192.168.122.100 \
+  --replace</code></pre><p>Open the console in virt-manager (<code>aap-appliance</code>) or:</p><pre><code>sudo virt-viewer aap-appliance</code></pre><h3>Optional: reach the API/console from the host</h3><pre><code>RENDEZVOUS_IP=192.168.122.100 ./scripts/setup-port-forwarding.sh
+# then https://localhost / API on localhost:6443</code></pre><h3>Monitor install</h3><pre><code>ssh core@192.168.122.100 sudo journalctl -fu assisted-service</code></pre><p>When installed:</p><pre><code>export KUBECONFIG=$PWD/build/cluster-config/auth/kubeconfig
+oc get nodes
+oc get automationorchestrator -n automation-orchestrator -w   # APPLIANCE_CONTENT=ao</code></pre><h3>Cleanup</h3><pre><code>sudo virsh destroy aap-appliance
+sudo virsh undefine aap-appliance --remove-all-storage
+sudo rm -f /var/lib/libvirt/images/aap-appliance.iso \
+           /var/lib/libvirt/images/agentconfig.noarch.iso \
+           /var/lib/libvirt/images/aap-appliance.raw</code></pre><h2>Copy-paste checklist</h2><pre><code>cd ~/git/aap-appliance
+
+# One-time (if needed)
+./scripts/libvirt-prereqs.sh
+
+# 0. builder leftovers
+fuser -k 55000/tcp 2&gt;/dev/null || true
+
+# 1. pins (AO)
+mkdir -p &quot;${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/containers&quot;
+cp ~/aap-appliance-output/aap-only-auth.json \
+  &quot;${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/containers/auth.json&quot;
+./scripts/update-ao-images.sh --authfile ~/aap-appliance-output/aap-only-auth.json
+cp ~/aap-appliance-output/pull-secret-merged.json \
+  &quot;${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/containers/auth.json&quot;
+
+# 2. bake image
+podman build -t localhost/aap-appliance:latest .
+
+# 3. build ISO (libvirt defaults — no GATEWAY/VM_MAC)
+mkdir -p ./build
+podman run --rm --privileged --net=host \
+  -e BASE_DOMAIN=example.com \
+  -e RENDEZVOUS_IP=192.168.122.100 \
+  -e MACHINE_NETWORK=192.168.122.0/24 \
+  -e APPLIANCE_CONTENT=ao \
+  -e DISCONNECTED=true \
+  -v &quot;$HOME/aap-appliance-output/pull-secret-merged.json:/run/secrets/pull-secret:Z&quot; \
+  -v &quot;$HOME/.ssh/id_rsa.pub:/run/secrets/ssh-key:Z&quot; \
+  -v &quot;$(pwd)/build:/assets:Z&quot; \
+  localhost/aap-appliance:latest
+
+# 4. boot under libvirt / virt-manager
+./scripts/dhcp-reserve.sh --mac 52:54:00:aa:bb:01 --ip 192.168.122.100
+VM_MAC=52:54:00:aa:bb:01 RENDEZVOUS_IP=192.168.122.100 \
+  ./scripts/launch-appliance.sh --output-dir ./build --replace</code></pre><h2>Troubleshooting</h2><table><tr><th>Symptom</th><th>Cause</th><th>Fix</th></tr><tr><td><code>unauthorized</code> on AO index during <code>update-ao-images.sh</code> while <code>skopeo</code> works</td><td><code>opm</code> using OpenShift <code>quay.io</code> creds</td><td>AAP-only authfile + <code>$XDG_RUNTIME_DIR/containers/auth.json</code></td></tr><tr><td><code>unauthorized</code> on <code>ocp-v4.0-art-dev</code> during <code>podman run</code></td><td>Merged secret overwrote OpenShift <code>quay.io</code></td><td>Keep OpenShift <code>quay.io</code>; only add <code>quay.io/aap</code></td></tr><tr><td><code>manifest unknown</code> for <code>operatorhubio/catalog@sha256:…</code></td><td>Stale catalog digest</td><td>Re-run <code>update-ao-images.sh</code>, rebuild container image, retry</td></tr><tr><td><code>55000 is already bound</code></td><td>Leftover oc-mirror</td><td><code>fuser -k 55000/tcp</code></td></tr><tr><td><code>manifest.json: no such file</code> under <code>build/cache</code></td><td>Interrupted registry copy</td><td><code>rm -rf ./build/cache</code> and retry</td></tr><tr><td>Mirror <code>context deadline exceeded</code> / <code>unexpected EOF</code></td><td>Transient Quay/CDN errors</td><td>Retry same <code>podman run</code> (warm cache)</td></tr><tr><td>VM gets wrong IP / install hangs on networking</td><td>MAC ≠ DHCP reservation</td><td>Same MAC in <code>dhcp-reserve.sh</code> and <code>launch-appliance.sh</code></td></tr><tr><td><code>VM &#x27;aap-appliance&#x27; already exists</code></td><td>Prior domain left behind</td><td>Add <code>--replace</code> to <code>launch-appliance.sh</code></td></tr><tr><td>Guest OOM / install dies mid-way</td><td>Too little RAM or host overcommit</td><td>≥ 32 GB guest RAM; leave headroom on the host</td></tr><tr><td>Can’t open console</td><td>Domain not started / no GUI</td><td><code>sudo virsh start aap-appliance</code>; <code>virt-manager</code> or <code>sudo virt-viewer aap-appliance</code></td></tr></table><h2>Why <code>APPLIANCE_CONTENT=ao</code> still mirrors some AAP images</h2><p>The builder caches a broad image set so one appliance ISO can pair with different</p><p><code>APPLIANCE_CONTENT</code> values later. Seeing <code>ansible-automation-platform-27/...</code> during an</p><p><code>ao</code> one-shot build is expected. What gets installed is still selected by</p><p><code>APPLIANCE_CONTENT</code> in the agentconfig / one-shot phase.</p>
+</body>
+</html>

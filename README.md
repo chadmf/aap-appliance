@@ -13,9 +13,12 @@ The image is built on top of the [openshift-appliance](https://github.com/opensh
 ## Prerequisites
 
 - `podman`
-- `sudo` (required for the privileged build container)
+- `sudo` (required for the privileged build container **if** you use root's image store; rootless works when you build and run as the same user)
 - At least 200 GB of free disk space in the output directory (the builder downloads OCP release artifacts)
 - A Red Hat pull secret — download from [console.redhat.com/openshift/install/pull-secret](https://console.redhat.com/openshift/install/pull-secret)
+- For AO / AAP pre-release: a `quay.io/aap` credential merged into that pull secret (see [BUILD.md](BUILD.md))
+
+> **Start here for a working build:** [BUILD.md](BUILD.md) — libvirt/qemu-kvm cookbook (auth merge, pin refresh, image bake, `launch-appliance.sh`, virt-manager). The sections below are reference; that guide is the runbook.
 
 ## What gets built
 
@@ -36,7 +39,10 @@ The built image includes (depending on `APPLIANCE_CONTENT`):
 
 ## Updating image pins
 
-Image digests are pinned in `config/` and managed by update scripts. Run the appropriate script(s) before each rebuild to pick up the latest digests.
+Image digests are pinned in `config/` and managed by update scripts. Run the appropriate script(s) before each rebuild to pick up the latest digests, then **rebuild the container image** so the new pins are baked in (`podman build -t localhost/aap-appliance:latest .`).
+
+> [!WARNING]
+> `quay.io/operatorhubio/catalog` digests expire quickly. A stale pin fails the appliance mirror with `manifest unknown` after nearly all other images succeed. Re-run `update-ao-images.sh` and rebuild the image if you see that error.
 
 ### AAP images
 
@@ -84,25 +90,27 @@ Review all changes with `git diff` before building.
 
 ## Build
 
+For the full ordered sequence (auth files → pin scripts → image bake → run → troubleshooting), use **[BUILD.md](BUILD.md)**.
+
 ```bash
-sudo podman build -t aap-appliance:latest .
+podman build -t localhost/aap-appliance:latest .
 ```
 
-This step bakes the static manifests into the image. It only needs to be done once per version. `sudo` is required so the image lands in root's store, where the privileged `podman run` can find it.
+This step bakes the static manifests into the image. Re-run it whenever `config/` or `assets/` pins change. Use `sudo` only if you plan to `sudo podman run` (image must live in the same store as the run).
 
 ## Run
 
 ```bash
-sudo podman run --rm --privileged --net=host \
+podman run --rm --privileged --net=host \
   -e BASE_DOMAIN=example.com \
   -e RENDEZVOUS_IP=192.168.122.100 \
-  -v /path/to/pull-secret.json:/run/secrets/pull-secret:Z \
+  -v /absolute/path/to/pull-secret-merged.json:/run/secrets/pull-secret:Z \
   -v ~/.ssh/id_rsa.pub:/run/secrets/ssh-key:Z \
   -v /absolute/path/to/output:/assets:Z \
-  aap-appliance:latest
+  localhost/aap-appliance:latest
 ```
 
-The container generates config files and runs the appliance builder. The output directory receives the built disk image and all cluster config files. This takes several minutes — the builder downloads the OCP release and assembles the image.
+The pull secret **must** include both OpenShift registry auth and `quay.io/aap` when building AO content — see [BUILD.md](BUILD.md). Cold builds take a long time (oc-mirror of the OCP release); retries with a warm `./build` cache are much faster.
 
 ### Parameters
 

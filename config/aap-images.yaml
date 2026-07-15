@@ -1,7 +1,7 @@
 # AAP operator images to pre-cache in the appliance registry.
 # Managed by scripts/update-aap-images.sh — do not edit manually.
 # BEGIN AAP IMAGES
-- name: registry.redhat.io/redhat/redhat-operator-index@sha256:4b67cc482eb354639230cf78c80b39e087bd082ec6bd791977fa865d6d150f55
+- name: registry.redhat.io/redhat/redhat-operator-index@sha256:3de81819ac68235e76a26e4feccd5c1b4c3921e1d4a338ac96ba55d43130fb2e
 - name: registry.redhat.io/ansible-automation-platform-27/controller-rhel9-operator@sha256:9950ec116ae0cbdee9e0b7d0f8cda5a26d6768fe47d4e118ee136d89ea55d9f9
 - name: registry.redhat.io/ansible-automation-platform-27/controller-rhel9@sha256:9964ac3ddb1f4b2494f6e40f777d49aa9523e7823f3fb2ec74bf9021e886c3b2
 - name: registry.redhat.io/ansible-automation-platform-27/eda-controller-rhel9-operator@sha256:ffa1378136aee98a8c01e4b0faef32aa0a4d46350978b51bf0240721f58c5ef4
