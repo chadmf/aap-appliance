@@ -160,7 +160,8 @@ VBoxManage startvm "$VM_NAME" --type headless
 
 echo ""
 echo "VM '$VM_NAME' started. Monitor installation:"
-echo "  ssh core@${RENDEZVOUS_IP} sudo journalctl -fu assisted-service"
+echo "  ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \\"
+echo "    core@${RENDEZVOUS_IP} sudo journalctl -fu assisted-service"
 echo ""
 echo "Once installed, access the cluster:"
 echo "  export KUBECONFIG=$(realpath "$OUTPUT_DIR")/cluster-config/auth/kubeconfig"

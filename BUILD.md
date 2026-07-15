@@ -350,7 +350,8 @@ RENDEZVOUS_IP=192.168.122.100 ./scripts/setup-port-forwarding.sh
 ### Monitor install
 
 ```bash
-ssh core@192.168.122.100 sudo journalctl -fu assisted-service
+SSH_OPTS='-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null'
+ssh $SSH_OPTS core@192.168.122.100 sudo journalctl -fu assisted-service
 ```
 
 When installed:
@@ -360,6 +361,23 @@ export KUBECONFIG=$PWD/build/cluster-config/auth/kubeconfig
 oc get nodes
 oc get automationorchestrator -n automation-orchestrator -w   # APPLIANCE_CONTENT=ao
 ```
+
+Add API/console names to `/etc/hosts` using the same `BASE_DOMAIN` as the build (script prompt or `-e BASE_DOMAIN=…`):
+
+```bash
+BASE_DOMAIN=nip.io            # must match the value used when building the ISO
+RENDEZVOUS_IP=192.168.122.100
+CLUSTER_NAME=appliance
+
+sudo tee -a /etc/hosts >/dev/null <<EOF
+${RENDEZVOUS_IP} api.${CLUSTER_NAME}.${BASE_DOMAIN}
+${RENDEZVOUS_IP} console-openshift-console.apps.${CLUSTER_NAME}.${BASE_DOMAIN}
+${RENDEZVOUS_IP} oauth-openshift.apps.${CLUSTER_NAME}.${BASE_DOMAIN}
+${RENDEZVOUS_IP} downloads-openshift-console.apps.${CLUSTER_NAME}.${BASE_DOMAIN}
+EOF
+```
+
+Then open `https://console-openshift-console.apps.${CLUSTER_NAME}.${BASE_DOMAIN}` (kubeadmin password in `build/cluster-config/auth/kubeadmin-password`).
 
 ### Cleanup
 

@@ -91,5 +91,5 @@ VBoxManage startvm "$VM_NAME" --type headless
 
 echo ""
 echo "VM '$VM_NAME' is up."
-echo "  ssh core@${RENDEZVOUS_IP}"
+echo "  ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null core@${RENDEZVOUS_IP}"
 echo "  oc get nodes  # requires KUBECONFIG from the original build output"

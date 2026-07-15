@@ -319,6 +319,13 @@ else
     prompt OUTPUT_DIR "Build output directory" "$REPO_ROOT/build"
     prompt RENDEZVOUS_IP "Rendezvous IP" "192.168.122.100"
     prompt VM_MAC "VM MAC" "52:54:00:aa:bb:01"
+    # Prefer domain from the built install-config (same value prompted at build time)
+    if [[ -z "${BASE_DOMAIN}" && -f "$(expand_path "$OUTPUT_DIR")/cluster-config/install-config.yaml" ]]; then
+        BASE_DOMAIN="$(awk '/^baseDomain:/{print $2; exit}' \
+            "$(expand_path "$OUTPUT_DIR")/cluster-config/install-config.yaml")"
+        [[ -n "$BASE_DOMAIN" ]] && log "Using BASE_DOMAIN=$BASE_DOMAIN from install-config.yaml"
+    fi
+    prompt BASE_DOMAIN "Cluster base domain (must match the ISO build)" "${BASE_DOMAIN}"
     LAUNCH_VM=yes
 fi
 
@@ -554,18 +561,40 @@ launch_vm() {
     "$REPO_ROOT/scripts/dhcp-reserve.sh" --mac "$VM_MAC" --ip "$RENDEZVOUS_IP"
 
     log "Launching libvirt VM (virt-manager domain: aap-appliance)"
+    BASE_DOMAIN="$BASE_DOMAIN" CLUSTER_NAME="${CLUSTER_NAME:-appliance}" \
     VM_MAC="$VM_MAC" RENDEZVOUS_IP="$RENDEZVOUS_IP" \
         "$REPO_ROOT/scripts/launch-appliance.sh" --output-dir "$OUTPUT_DIR" --replace
 
-    cat <<EOF
+    [[ -n "${BASE_DOMAIN:-}" ]] || die "BASE_DOMAIN is empty — re-run and enter the domain used at build time"
+    local cluster_name="${CLUSTER_NAME:-appliance}"
+    # Outer delimiter must not be EOF — the printed /etc/hosts snippet uses <<EOF … EOF
+    cat <<LAUNCH_MSG
 
 Appliance VM launching.
 
   Console:  virt-manager  (or: sudo virt-viewer aap-appliance)
-  Monitor:  ssh core@${RENDEZVOUS_IP} sudo journalctl -fu assisted-service
-  Kubeconfig (after install):
+  SSH:      ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null core@${RENDEZVOUS_IP}
+            (private key matching the SSH public key used at build time; no password)
+  Monitor:  ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \\
+              core@${RENDEZVOUS_IP} sudo journalctl -fu assisted-service
+
+  After OCP install — access the cluster:
             export KUBECONFIG=${OUTPUT_DIR}/cluster-config/auth/kubeconfig
+            oc whoami
+            oc get nodes
+            cat ${OUTPUT_DIR}/cluster-config/auth/kubeadmin-password   # kubeadmin console password
+
+  Add to /etc/hosts (BASE_DOMAIN=${BASE_DOMAIN} from this run's prompt / install-config):
+            sudo tee -a /etc/hosts >/dev/null <<EOF
+${RENDEZVOUS_IP} api.${cluster_name}.${BASE_DOMAIN}
+${RENDEZVOUS_IP} console-openshift-console.apps.${cluster_name}.${BASE_DOMAIN}
+${RENDEZVOUS_IP} oauth-openshift.apps.${cluster_name}.${BASE_DOMAIN}
+${RENDEZVOUS_IP} downloads-openshift-console.apps.${cluster_name}.${BASE_DOMAIN}
 EOF
+
+  Console URL:
+            https://console-openshift-console.apps.${cluster_name}.${BASE_DOMAIN}
+LAUNCH_MSG
 }
 
 # --- main ---
@@ -622,14 +651,23 @@ fi
 if [[ "${LAUNCH_VM:-no}" == "yes" ]]; then
     launch_vm
 else
-    cat <<EOF
+    cluster_name="${CLUSTER_NAME:-appliance}"
+    cat <<DONE_MSG
 
 Build finished.
 
   ISO:      ${OUTPUT_DIR}/appliance.iso
   Config:   ${OUTPUT_DIR}/cluster-config/agentconfig.noarch.iso
-  Launch:   ./scripts/build-libvirt.sh --launch-only --yes \\
+  Launch:   BASE_DOMAIN=${BASE_DOMAIN} ./scripts/build-libvirt.sh --launch-only --yes \\
               OUTPUT_DIR=${OUTPUT_DIR} RENDEZVOUS_IP=${RENDEZVOUS_IP} VM_MAC=${VM_MAC}
             or see BUILD.md
+
+  After install — add to /etc/hosts (BASE_DOMAIN=${BASE_DOMAIN} from this run):
+            sudo tee -a /etc/hosts >/dev/null <<EOF
+${RENDEZVOUS_IP} api.${cluster_name}.${BASE_DOMAIN}
+${RENDEZVOUS_IP} console-openshift-console.apps.${cluster_name}.${BASE_DOMAIN}
+${RENDEZVOUS_IP} oauth-openshift.apps.${cluster_name}.${BASE_DOMAIN}
+${RENDEZVOUS_IP} downloads-openshift-console.apps.${cluster_name}.${BASE_DOMAIN}
 EOF
+DONE_MSG
 fi

@@ -291,10 +291,11 @@ Watch early boot progress via the graphical console:
 sudo virt-viewer aap-appliance
 ```
 
-Once the node is up, tail the assisted installer:
+Once the node is up, tail the assisted installer (host keys change when VMs are recreated):
 
 ```bash
-ssh core@192.168.122.100
+SSH_OPTS='-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null'
+ssh $SSH_OPTS core@192.168.122.100
 sudo journalctl -fu assisted-service   # orchestrates installation
 sudo journalctl -fu agent              # runs steps on this host
 ```
@@ -302,7 +303,7 @@ sudo journalctl -fu agent              # runs steps on this host
 Monitor installation progress via the Assisted Installer API:
 
 ```bash
-export TOKEN=$(ssh core@192.168.122.100 \
+export TOKEN=$(ssh $SSH_OPTS core@192.168.122.100 \
   "sudo grep USER_AUTH_TOKEN /etc/assisted/rendezvous-host.env | cut -d= -f2")
 
 export CLUSTER_ID=$(curl -s -H "Authorization: $TOKEN" \
@@ -331,12 +332,46 @@ When `Cluster: installed` appears, the cluster is ready.
 
 ## Accessing the cluster
 
+After installation finishes, use the kubeconfig written into the build output directory:
+
 ```bash
-export KUBECONFIG=/path/to/output/cluster-config/auth/kubeconfig
+export KUBECONFIG=/absolute/path/to/output/cluster-config/auth/kubeconfig
+
+# Verify
+oc whoami
 oc get nodes
 oc get clusteroperators
-oc get aap -n aap -w
 ```
+
+Optional — copy for later sessions:
+
+```bash
+mkdir -p ~/.kube
+cp /absolute/path/to/output/cluster-config/auth/kubeconfig ~/.kube/config
+```
+
+Web console: user `kubeadmin`, password from:
+
+```bash
+cat /absolute/path/to/output/cluster-config/auth/kubeadmin-password
+```
+
+Add cluster DNS names to `/etc/hosts` on your laptop using the same `BASE_DOMAIN` / `RENDEZVOUS_IP` as the build:
+
+```bash
+BASE_DOMAIN=nip.io            # must match -e BASE_DOMAIN=… / script prompt
+RENDEZVOUS_IP=192.168.122.100
+CLUSTER_NAME=appliance
+
+sudo tee -a /etc/hosts >/dev/null <<EOF
+${RENDEZVOUS_IP} api.${CLUSTER_NAME}.${BASE_DOMAIN}
+${RENDEZVOUS_IP} console-openshift-console.apps.${CLUSTER_NAME}.${BASE_DOMAIN}
+${RENDEZVOUS_IP} oauth-openshift.apps.${CLUSTER_NAME}.${BASE_DOMAIN}
+${RENDEZVOUS_IP} downloads-openshift-console.apps.${CLUSTER_NAME}.${BASE_DOMAIN}
+EOF
+```
+
+Then open `https://console-openshift-console.apps.${CLUSTER_NAME}.${BASE_DOMAIN}`.
 
 The local-path-provisioner is already running as the default StorageClass. The appliance automatically applies operator CRs once the operator CRDs are registered.
 

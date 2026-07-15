@@ -144,7 +144,30 @@ fi
 
 echo ""
 echo "VM '$VM_NAME' started. Monitor installation:"
-echo "  ssh core@${RENDEZVOUS_IP} sudo journalctl -fu assisted-service"
+echo "  ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \\"
+echo "    core@${RENDEZVOUS_IP} sudo journalctl -fu assisted-service"
+CLUSTER_NAME="${CLUSTER_NAME:-appliance}"
+if [[ -z "${BASE_DOMAIN:-}" && -f "$OUTPUT_DIR/cluster-config/install-config.yaml" ]]; then
+    BASE_DOMAIN="$(awk '/^baseDomain:/{print $2; exit}' "$OUTPUT_DIR/cluster-config/install-config.yaml")"
+fi
+BASE_DOMAIN="${BASE_DOMAIN:-}"
+
 echo ""
 echo "Once installed:"
 echo "  export KUBECONFIG=$(realpath "$OUTPUT_DIR")/cluster-config/auth/kubeconfig"
+if [[ -n "$BASE_DOMAIN" ]]; then
+    echo ""
+    echo "Add to /etc/hosts (BASE_DOMAIN=${BASE_DOMAIN} from build):"
+    echo "  sudo tee -a /etc/hosts >/dev/null <<EOF"
+    echo "${RENDEZVOUS_IP} api.${CLUSTER_NAME}.${BASE_DOMAIN}"
+    echo "${RENDEZVOUS_IP} console-openshift-console.apps.${CLUSTER_NAME}.${BASE_DOMAIN}"
+    echo "${RENDEZVOUS_IP} oauth-openshift.apps.${CLUSTER_NAME}.${BASE_DOMAIN}"
+    echo "${RENDEZVOUS_IP} downloads-openshift-console.apps.${CLUSTER_NAME}.${BASE_DOMAIN}"
+    echo "EOF"
+    echo ""
+    echo "Console: https://console-openshift-console.apps.${CLUSTER_NAME}.${BASE_DOMAIN}"
+else
+    echo ""
+    echo "Add API/console names to /etc/hosts using the BASE_DOMAIN from your build"
+    echo "  (see install-config.yaml baseDomain, or re-run with BASE_DOMAIN=...)."
+fi
