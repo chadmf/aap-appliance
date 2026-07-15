@@ -1,5 +1,7 @@
 # AAP Appliance — repeatable build cookbook (libvirt / qemu-kvm)
 
+> Prefer the short path? **[QUICKSTART.md](QUICKSTART.md)** (Linux/libvirt) or **[QUICKSTART-macos.md](QUICKSTART-macos.md)** (VirtualBox).
+
 End-to-end runbook for building an appliance ISO and booting it under **virt-manager /
 libvirt / qemu-kvm**. Product background lives in [README.md](README.md); this file is
 the build + launch sequence that actually works.
@@ -38,6 +40,100 @@ node always gets `RENDEZVOUS_IP`.
 ## Critical: two different auth files
 
 Mixing these wrong is the #1 failure mode.
+
+### Creating the `quay.io/aap` robot token JSON
+
+AO / AAP pre-release images live under the **`aap` organization on [quay.io](https://quay.io)**.
+A stock OpenShift pull secret does **not** include this. You need a Quay robot (or user token)
+with **Read** on the repos you pull (at minimum the operator indexes under
+`quay.io/aap/ansible-automation-platform/...`).
+
+#### 1. Create or reuse a robot in the `aap` org
+
+1. Sign in at [https://quay.io](https://quay.io) with an account that is a member of the **`aap`** org
+   (ask your AAP team admin if you cannot see the org).
+2. Open **aap** → **Robot Accounts** (or *Organization Settings → Robot accounts*).
+3. **Create Robot Account** (e.g. `myname-pull`) **or** open an existing pull robot.
+4. Under the robot, set repository permissions to **Read** for the images you need
+   (org-wide read if your admin allows it; otherwise the specific
+   `ansible-automation-platform` repositories).
+5. Open the robot → **Credentials** / kebab menu → view the username + token.
+   - Username looks like: `aap+myname-pull`
+   - Password/token: long secret string (shown once — copy it)
+
+You can also use **podman login** / **docker login** and then harvest the encoded entry
+(see step 3).
+
+#### 2. Encode `username:token` as base64
+
+```bash
+# Replace with your robot username and token
+printf '%s' 'aap+myname-pull:THE_TOKEN_HERE' | base64 -w0
+echo
+```
+
+On macOS, `base64` has no `-w0`; use:
+
+```bash
+printf '%s' 'aap+myname-pull:THE_TOKEN_HERE' | base64
+```
+
+#### 3. Write a small auth JSON file
+
+Save as e.g. `~/aap-appliance-output/aap-only-auth.json`:
+
+```json
+{
+  "auths": {
+    "quay.io/aap": {
+      "auth": "PASTE_BASE64_OUTPUT_HERE"
+    }
+  }
+}
+```
+
+`auth` must be the base64 of `username:token` (not the raw token alone).
+
+One-liner that writes the file:
+
+```bash
+mkdir -p ~/aap-appliance-output
+read -r -p "Robot username (e.g. aap+myname-pull): " QUSER
+read -r -s -p "Robot token: " QTOKEN; echo
+export QUSER QTOKEN
+python3 - <<'PY'
+import json, base64, os
+from pathlib import Path
+auth = base64.b64encode(f'{os.environ["QUSER"]}:{os.environ["QTOKEN"]}'.encode()).decode()
+path = Path.home() / "aap-appliance-output" / "aap-only-auth.json"
+path.write_text(json.dumps({"auths": {"quay.io/aap": {"auth": auth}}}))
+print("wrote", path)
+PY
+unset QUSER QTOKEN
+```
+
+**Alternative — login then copy:**
+
+```bash
+podman login quay.io/aap -u 'aap+myname-pull'
+# enter token when prompted
+# Then copy the quay.io/aap (or quay.io) entry from:
+#   $XDG_RUNTIME_DIR/containers/auth.json
+# or ~/.config/containers/auth.json
+```
+
+#### 4. Verify
+
+```bash
+skopeo inspect --authfile ~/aap-appliance-output/aap-only-auth.json \
+  docker://quay.io/aap/ansible-automation-platform/automation-orchestrator-operator-index:main \
+  >/dev/null && echo "AO index: ok"
+```
+
+If this fails with `unauthorized`, the robot lacks Read on that repo or the username/token is wrong.
+
+Then merge this file with your OpenShift pull secret as in the next section (keep OpenShift’s
+`quay.io` entry; only add `quay.io/aap`).
 
 ### 1. Merged pull secret — for `podman run` (appliance mirror)
 

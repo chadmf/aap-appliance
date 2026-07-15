@@ -18,7 +18,7 @@ The image is built on top of the [openshift-appliance](https://github.com/opensh
 - A Red Hat pull secret — download from [console.redhat.com/openshift/install/pull-secret](https://console.redhat.com/openshift/install/pull-secret)
 - For AO / AAP pre-release: a `quay.io/aap` credential merged into that pull secret (see [BUILD.md](BUILD.md))
 
-> **Start here for a working build:** [BUILD.md](BUILD.md) — libvirt/qemu-kvm cookbook (auth merge, pin refresh, image bake, `launch-appliance.sh`, virt-manager). The sections below are reference; that guide is the runbook.
+> **Start here:** [QUICKSTART.md](QUICKSTART.md) (Linux/libvirt) or [QUICKSTART-macos.md](QUICKSTART-macos.md) (VirtualBox) → full cookbook: [BUILD.md](BUILD.md). The sections below are reference.
 
 ## What gets built
 
@@ -164,6 +164,7 @@ The `scripts/` directory contains convenience scripts for every step. All script
 
 | Script | Purpose |
 |---|---|
+| [`scripts/build-libvirt.sh`](scripts/build-libvirt.sh) | **Interactive one-shot** — auth merge, pins, image bake, appliance build, libvirt launch ([BUILD.md](BUILD.md)) |
 | [`scripts/libvirt-prereqs.sh`](scripts/libvirt-prereqs.sh) | Install and enable libvirt/KVM on the host (run once) |
 | [`scripts/dhcp-reserve.sh`](scripts/dhcp-reserve.sh) | Add a DHCP reservation so the VM always gets `RENDEZVOUS_IP` |
 | [`scripts/launch-appliance.sh`](scripts/launch-appliance.sh) | Create a libvirt VM from build output (live-iso or raw) |
