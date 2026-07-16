@@ -39,12 +39,25 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
-if sudo virsh net-dumpxml "$LIBVIRT_NETWORK" | grep -q "$VM_MAC"; then
+# Prefer plain virsh (libvirt group); fall back to passwordless sudo, then interactive.
+virsh_cmd() {
+    if virsh net-info "$LIBVIRT_NETWORK" >/dev/null 2>&1; then
+        virsh "$@"
+        return $?
+    fi
+    if sudo -n virsh net-info "$LIBVIRT_NETWORK" >/dev/null 2>&1; then
+        sudo -n virsh "$@"
+        return $?
+    fi
+    sudo virsh "$@"
+}
+
+if virsh_cmd net-dumpxml "$LIBVIRT_NETWORK" | grep -q "$VM_MAC"; then
     echo "DHCP reservation for $VM_MAC already exists in network '$LIBVIRT_NETWORK', skipping."
     exit 0
 fi
 
-sudo virsh net-update "$LIBVIRT_NETWORK" add ip-dhcp-host \
+virsh_cmd net-update "$LIBVIRT_NETWORK" add ip-dhcp-host \
     "<host mac=\"$VM_MAC\" ip=\"$RENDEZVOUS_IP\"/>" \
     --live --config
 

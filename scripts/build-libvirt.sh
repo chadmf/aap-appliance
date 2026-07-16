@@ -518,8 +518,24 @@ build_image() {
     (cd "$REPO_ROOT" && podman build -t "$IMAGE" .)
 }
 
+clean_appliance_assets() {
+    # openshift-appliance refuses to rebuild until 'clean' clears prior state.
+    log "Cleaning prior appliance build state under $OUTPUT_DIR"
+    podman run --rm --privileged \
+        --entrypoint /openshift-appliance \
+        -v "$OUTPUT_DIR:/assets:Z" \
+        "$IMAGE" --dir /assets clean
+}
+
 build_appliance() {
     free_builder_ports
+    # openshift-appliance skips rebuild when prior state exists. Clean when pins
+    # changed or FORCE_APPLIANCE_CLEAN=yes so a new ISO is actually produced.
+    if [[ "${FORCE_APPLIANCE_CLEAN:-}" == "yes" || "${UPDATE_PINS:-no}" == "yes" ]]; then
+        if [[ -f "$OUTPUT_DIR/appliance.iso" || -f "$OUTPUT_DIR/.openshift_install_state.json" ]]; then
+            clean_appliance_assets
+        fi
+    fi
     log "Building appliance → $OUTPUT_DIR"
     echo "    content=$APPLIANCE_CONTENT domain=$BASE_DOMAIN ip=$RENDEZVOUS_IP"
     # shellcheck disable=SC2086
@@ -536,8 +552,13 @@ build_appliance() {
 }
 
 ensure_libvirt() {
-    if command -v virsh >/dev/null 2>&1 && sudo virsh net-info default >/dev/null 2>&1; then
-        sudo virsh net-start default 2>/dev/null || true
+    # Prefer plain virsh (user in libvirt group); avoid interactive sudo in --yes mode.
+    if command -v virsh >/dev/null 2>&1 && virsh net-info default >/dev/null 2>&1; then
+        virsh net-start default 2>/dev/null || true
+        return 0
+    fi
+    if command -v virsh >/dev/null 2>&1 && sudo -n virsh net-info default >/dev/null 2>&1; then
+        sudo -n virsh net-start default 2>/dev/null || true
         return 0
     fi
     if [[ -z "${RUN_LIBVIRT_PREREQS}" ]]; then
@@ -546,7 +567,7 @@ ensure_libvirt() {
     if [[ "${RUN_LIBVIRT_PREREQS}" == "yes" ]]; then
         "$REPO_ROOT/scripts/libvirt-prereqs.sh"
     else
-        die "libvirt is required to launch the VM"
+        die "libvirt is required to launch the VM (virsh must work without a password, or run libvirt-prereqs.sh)"
     fi
 }
 

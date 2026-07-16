@@ -92,7 +92,7 @@ Useful flags: `--skip-launch`, `--launch-only`, `--update-pins-only`, `--skip-pi
 
 ## After it starts
 
-**Node SSH (RHCOS `core` user)** — use the private key that matches the public key you gave the builder (no password). Disable host-key checks so recreated VMs do not trip `KNOWN_HOSTS` errors:
+**Node SSH (RHCOS** `core` **user)** — use the private key that matches the public key you gave the builder (no password). Disable host-key checks so recreated VMs do not trip `KNOWN_HOSTS` errors:
 
 ```bash
 SSH_OPTS='-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null'
@@ -147,7 +147,7 @@ Web console (user `kubeadmin`):
 cat build/cluster-config/auth/kubeadmin-password
 ```
 
-**`/etc/hosts` — required for name resolution from your laptop**
+`/etc/hosts` **— required for name resolution from your laptop**
 
 Use the same **base domain** you entered when `build-libvirt.sh` prompted (also printed in the script’s post-launch `/etc/hosts` block). Unquoted `<<EOF` expands the variables:
 
@@ -165,7 +165,7 @@ ${RENDEZVOUS_IP} downloads-openshift-console.apps.${CLUSTER_NAME}.${BASE_DOMAIN}
 EOF
 ```
 
-Then open `https://console-openshift-console.apps.${CLUSTER_NAME}.${BASE_DOMAIN}` (e.g. `…apps.appliance.nip.io`).
+Then open `https://console-openshift-console.apps.${CLUSTER_NAME}.${BASE_DOMAIN}` (e.g. `…apps.appliance.example.com`).
 
 (`*.apps` wildcards are not supported in `/etc/hosts`; add more app routes the same way if needed.)
 
@@ -183,23 +183,4 @@ build/cluster-config/agentconfig.noarch.iso
 build/cluster-config/auth/kubeconfig
 build/cluster-config/auth/kubeadmin-password
 ```
-
-## Common failures
-
-
-| Error                                          | Fix                                                                                                   |
-| ---------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
-| `unauthorized` on AO index during pin update   | Re-run and enter a valid `aap` org robot username/token when prompted                                 |
-| `unauthorized` on OCP release images           | Do not overwrite OpenShift `quay.io` with the AAP robot — the script keeps both                       |
-| `manifest unknown` for `operatorhubio/catalog` | Re-run with pin refresh (default), or `./scripts/build-libvirt.sh --update-pins-only` then full build |
-| `55000 is already bound`                       | Leftover oc-mirror; script clears this, or `fuser -k 55000/tcp`                                       |
-| Wrong VM IP                                    | Same MAC in DHCP reserve and launch (`52:54:00:aa:bb:01` by default)                                  |
-
-
-
-
-## Next reading
-
-- [BUILD.md](BUILD.md) — full cookbook  
-- [README.md](README.md) — products, parameters, monitoring
 
